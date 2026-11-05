@@ -1,8 +1,10 @@
-# 壁纸生产配方（九代固化版）
+# 壁纸生产配方（十代固化版）
 
 > 来源：五～七代「官方图案背景线」收敛结论（PR #12 / #14 / #16，issue #11/#13/#15）；
-> 八代批量固化（PR #18，issue #17）；九代尺寸档下调与两条硬闸（issue #19）。
-> 本文件是**可复现交付配方**：照此执行即可稳定产出合格壁纸。九代批量生产（`delivery/batch/` 内 r9-* ）按本配方执行。
+> 八代批量固化（PR #18，issue #17）；九代尺寸档下调与两条硬闸（issue #19）；
+> 十代派大星皮肤红点清理进 §4.3 四件套与 §5 C4 必检（issue #21）。
+> 本文件是**可复现交付配方**：照此执行即可稳定产出合格壁纸。九代批量生产（`delivery/batch/` 内 r9-* ）按九代版执行，
+> 十代批量生产（`delivery/batch/` 内 r10-* ）按本配方执行。
 
 合格硬标准（每张必须全满足，缺一判不合格）：
 
@@ -84,7 +86,7 @@ hands in pockets, holding object, cropped, cut off, out of frame, partial body
 | 角色 | LoRA | 权重(model/clip) | 触发词 | 备注（为什么用/注意什么） |
 |---|---|---|---|---|
 | 海绵宝宝 | `sbpilot.safetensors` | **0.85** | `spongebob squarepants` | 七代胜出：单角色训练、caption 即 §1.1 特征词，无互串；多角色版 sbp-r7 在新姿态下持续互串（粉头/绿箭头/海绵块手）。权重 0.85 压蓝色袖泄漏。**已知轻微漂移**：手指偏细长、头部外缘一圈浅绿描边——手机尺寸不显眼，七代人工验收通过 |
-| 派大星 | `Patrick_il.safetensors` | 1.0 | `p4tr1ckst4r` + `official style` | 出图**必带** §4 三件套清理（红描边回正 + 短裤花斑/蓝彩条回填），数据伪影固定、清理参数固定 |
+| 派大星 | `Patrick_il.safetensors` | 1.0 | `p4tr1ckst4r` + `official style` | 出图**必带** §4 四件套清理（红描边回正 + 短裤花斑/蓝彩条回填 + 皮肤红点回填，十代起），数据伪影固定、清理参数固定 |
 | 章鱼哥 | `squidward-v3.safetensors` | 1.0 | `squidward tentacles` | 五~七代零漂移 |
 | 珊迪 | `Sandy_il.safetensors` | 1.0 | `sandycheeks` | 训练集带 `pink flower` 高频 tag，负面里保留 `flower, plants` 防花形漂浮物 |
 | 蟹老板 | `krabs-v3.safetensors` | 1.0 | `eugene krabs` | 训练集含“抱钱云(美元符号)”→ 负面排 `money/dollar sign/coins/money bag` 防怪道具 |
@@ -131,13 +133,19 @@ hands in pockets, holding object, cropped, cut off, out of frame, partial body
   站位向簇心收拢（相邻角色 cx 较八代间距约收紧 15%），角色缩小后仍保持围合叠压与手部关联，不散成并列。
 - **C2 互动靠三件事**：① 视线方向（各单元生成时用 looking-to 对齐对手）；② 前后叠压与间距（集群围合，不并列）；③ 泡泡带——程序绘制样张同款线环泡泡+小实心点，从一侧角色升起、掠过中间角色、落到另一侧伸出的手/头，串起视线链。**除泡泡外不加任何道具**（C4 防怪道具）。
 
-### 4.3 派大星固定后处理三件套（顺序不可换）
+### 4.3 派大星固定后处理四件套（顺序不可换）
 
 1. `clean_patrick_blue`：短裤蓝色彩条/花形孤岛（Patrick_il 属性泄漏）→ 局部面板色调和扩散回填；
 2. `clean_patrick_blotches`：绿短裤上被绿色围合的异色小孤岛 → 短裤中位色回填（BFS 围合判定，防误伤眼/描边）；
-3. `fix_patrick_outline`：外轮廓 10px 带内强红像素（权重=红度×低绿度）向近黑 `(20,18,16)` 均匀混合——
+3. `clean_patrick_skin`（十代新增，issue #21）：粉色皮肤上散落的暗红小点（Patrick_il 红色素泄漏/数据伪影，
+   与 1/2/4 同源）→ 逐孤岛回填为周围肤色：在皮肤区内取「红度明显高于本图肤色中位数（动态阈值
+   `R−G > 肤色中位差+12` 且 `G < 肤色中位−18`）、面积 ≤400px、外围环带 ≥75% 为皮肤」的异常红孤岛，
+   以其环带肤色中位数 + 高斯扩散回填（含 1px AA 圈）。眼睛/嘴/口腔红为大色块由面积上限排除，
+   描边带触碰半透明边由围合判定排除——只清散点，不误伤五官与描边；
+4. `fix_patrick_outline`：外轮廓 10px 带内强红像素（权重=红度×低绿度）向近黑 `(20,18,16)` 均匀混合——
    描边核心 (227,85,70) 全量回色、皮肤粉不动、口腔红在带外不受影响。
-（顺序原因：先 blue 再 blotches，否则 blotches 级联留橄榄 AA 圈、blue 空转。参数即 PR #14/#16 固化值。）
+（顺序原因：先 blue 再 blotches，否则 blotches 级联留橄榄 AA 圈、blue 空转；skin 在 outline **之前**，
+轮廓带内的红点先回肤色、不留近黑残点，描边核心线面积大不受 skin 影响。参数即 PR #14/#16 固化值 + 十代新增。）
 
 ## 5. 审计规程（单元级 + 成品级）
 
@@ -162,7 +170,7 @@ hands in pockets, holding object, cropped, cut off, out of frame, partial body
 | C1 | 与样张并排比：底色/花朵/沙地同款、角色为官方画风、无 3D/写实感 |
 | C2 | 角色数 ≤3；视线两两相关、有前后叠压与共同焦点；泡泡带存在（如用） |
 | C3 | 海绵宝宝双臂双手双腿、逐指可辨、恰好两只鞋；所有角色无缺件；贴入比 ≤1.0x（脚本打印报告核对） |
-| C4 | 描边无偏色（尤其派大星外缘）、无漂浮怪道具、无文字/水印、无畸变、尺寸恰 1440x3200 |
+| C4 | 描边无偏色（尤其派大星外缘）、**派大星皮肤无红点**（十代新增，issue #21：皮肤区无暗红散点，`patrick_skin.detect_patrick_specks` 程序化残留计数须为 0，含派大星场景另存皮肤区 100% 裁切 `output/audit10/<scene>-<unit>-skin.png` 逐张人工复核）、无漂浮怪道具、无文字/水印、无畸变、尺寸恰 1440x3200 |
 | **C5** | **人物尺寸=新样张档**：全员贴入高在 §4.2 九代新档区间内；主角顶部 y ≥52% 高度、全员最高点 y ≥50% 高度线（自画面顶部起算，`paste-report.json` + `TOP_FLOOR` 核对）；上方与四周图案背景留白充分，向样张占比靠拢或更疏朗 |
 | **闸A** | 蟹老板贴入比 ≤0.85x（代码强制 + 报告复核） |
 | **闸B** | 珊迪每张：盔圈闭合完整（100% 头盔裁切图复核，存档 `output/audit9/`） |
@@ -178,7 +186,9 @@ python3 gen-round9.py char --role sandy-cheer --seeds <s1>,<s2>,...   # 每角�
 python3 gen-round9.py rmbg --role sandy-cheer --keep <选中文件>
 # ③ 背景
 python3 bg-flat.py --out <bg.png>                                   # 1440x3200
-# ④ 合成（场景表在 compose-round9.py 的 SCENES 内：新档高度 + 硬闸A/B + C5 自检）
-python3 compose-round9.py --bg <bg.png> --scene <scene-id>|all --outdir output/round9
-# ⑤ 按 §5 成品审计（C1–C5 + 闸A/闸B，paste-report.json 与 audit9 裁切图核对）；合格图收进 delivery/batch/
+# ④ 合成（场景表在 compose-round9.py 的 SCENES 内：新档高度 + 硬闸A/B + C5 自检；
+#    十代起用 compose-round10.py 复用同一场景表，仅 §4.3 扩为四件套含皮肤红点回填）
+python3 compose-round10.py --bg <bg.png> --scene <scene-id>|all --outdir output/round10
+# ⑤ 按 §5 成品审计（C1–C5 + 闸A/闸B + C4 皮肤必检，paste-report.json、audit10 裁切图与
+#    detect_patrick_specks 残留计数核对）；合格图收进 delivery/batch/
 ```
