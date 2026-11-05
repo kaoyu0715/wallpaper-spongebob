@@ -1,0 +1,269 @@
+[
+ {
+  "scene": "b01-sb-pat-bubbles",
+  "key": "pat_l",
+  "unit": "patrick-g5.png",
+  "paste_h": 745,
+  "trim_h": 1200,
+  "ratio": 0.621,
+  "top": 2025,
+  "skin_specks": 0
+ },
+ {
+  "scene": "b01-sb-pat-bubbles",
+  "key": "sb_r",
+  "unit": "spongebob-c1_00001.png",
+  "paste_h": 615,
+  "trim_h": 860,
+  "ratio": 0.715,
+  "top": 2255
+ },
+ {
+  "scene": "b02-sb-sq-pat-bubbles",
+  "key": "sq_front",
+  "unit": "squidward-g5.png",
+  "paste_h": 865,
+  "trim_h": 1138,
+  "ratio": 0.76,
+  "top": 1655
+ },
+ {
+  "scene": "b02-sb-sq-pat-bubbles",
+  "key": "pat_l",
+  "unit": "patrick-g5.png",
+  "paste_h": 745,
+  "trim_h": 1200,
+  "ratio": 0.621,
+  "top": 2045,
+  "skin_specks": 0
+ },
+ {
+  "scene": "b02-sb-sq-pat-bubbles",
+  "key": "sb_r",
+  "unit": "spongebob-c1_00001.png",
+  "paste_h": 615,
+  "trim_h": 860,
+  "ratio": 0.715,
+  "top": 2255
+ },
+ {
+  "scene": "b03-sandy-sb-hello",
+  "key": "sandy_l",
+  "unit": "sandy-left11_00001.png",
+  "paste_h": 765,
+  "trim_h": 1261,
+  "ratio": 0.607,
+  "top": 1935
+ },
+ {
+  "scene": "b03-sandy-sb-hello",
+  "key": "sb_r",
+  "unit": "spongebob-c1_00001.png",
+  "paste_h": 610,
+  "trim_h": 860,
+  "ratio": 0.709,
+  "top": 2260
+ },
+ {
+  "scene": "b04-krabs-sb-laugh",
+  "key": "krabs",
+  "unit": "krabs-open_00001.png",
+  "paste_h": 780,
+  "trim_h": 918,
+  "ratio": 0.85,
+  "top": 1920
+ },
+ {
+  "scene": "b04-krabs-sb-laugh",
+  "key": "sb_r",
+  "unit": "spongebob-c1_00001.png",
+  "paste_h": 610,
+  "trim_h": 860,
+  "ratio": 0.709,
+  "top": 2265
+ },
+ {
+  "scene": "b05-gary-sb-pet",
+  "key": "sb_r",
+  "unit": "spongebob-c1_00001.png",
+  "paste_h": 615,
+  "trim_h": 860,
+  "ratio": 0.715,
+  "top": 2235
+ },
+ {
+  "scene": "b05-gary-sb-pet",
+  "key": "gary",
+  "unit": "gary-front_00001.png",
+  "paste_h": 245,
+  "trim_h": 1095,
+  "ratio": 0.224,
+  "top": 2705
+ },
+ {
+  "scene": "b06-sq-sb-bubbles",
+  "key": "sq_front",
+  "unit": "squidward-g5.png",
+  "paste_h": 865,
+  "trim_h": 1138,
+  "ratio": 0.76,
+  "top": 1665
+ },
+ {
+  "scene": "b06-sq-sb-bubbles",
+  "key": "sb_r",
+  "unit": "spongebob-c1_00001.png",
+  "paste_h": 610,
+  "trim_h": 860,
+  "ratio": 0.709,
+  "top": 2260
+ },
+ {
+  "scene": "b07-sandy-sb-pat-cheer",
+  "key": "sandy_c",
+  "unit": "sandy-cheer11_00001.png",
+  "paste_h": 760,
+  "trim_h": 1099,
+  "ratio": 0.692,
+  "top": 1740
+ },
+ {
+  "scene": "b07-sandy-sb-pat-cheer",
+  "key": "pat_l",
+  "unit": "patrick-g5.png",
+  "paste_h": 745,
+  "trim_h": 1200,
+  "ratio": 0.621,
+  "top": 2045,
+  "skin_specks": 0
+ },
+ {
+  "scene": "b07-sandy-sb-pat-cheer",
+  "key": "sb_r",
+  "unit": "spongebob-c1_00001.png",
+  "paste_h": 615,
+  "trim_h": 860,
+  "ratio": 0.715,
+  "top": 2245
+ },
+ {
+  "scene": "b08-krabs-sb-pat",
+  "key": "krabs",
+  "unit": "krabs-open_00001.png",
+  "paste_h": 780,
+  "trim_h": 918,
+  "ratio": 0.85,
+  "top": 1720
+ },
+ {
+  "scene": "b08-krabs-sb-pat",
+  "key": "pat_l",
+  "unit": "patrick-g5.png",
+  "paste_h": 745,
+  "trim_h": 1200,
+  "ratio": 0.621,
+  "top": 2045,
+  "skin_specks": 0
+ },
+ {
+  "scene": "b08-krabs-sb-pat",
+  "key": "sb_r",
+  "unit": "spongebob-c1_00001.png",
+  "paste_h": 610,
+  "trim_h": 860,
+  "ratio": 0.709,
+  "top": 2255
+ },
+ {
+  "scene": "b09-gary-sb-pat",
+  "key": "pat_l",
+  "unit": "patrick-g5.png",
+  "paste_h": 740,
+  "trim_h": 1200,
+  "ratio": 0.617,
+  "top": 2020,
+  "skin_specks": 0
+ },
+ {
+  "scene": "b09-gary-sb-pat",
+  "key": "sb_r",
+  "unit": "spongebob-c1_00001.png",
+  "paste_h": 615,
+  "trim_h": 860,
+  "ratio": 0.715,
+  "top": 2240
+ },
+ {
+  "scene": "b09-gary-sb-pat",
+  "key": "gary",
+  "unit": "gary-front_00001.png",
+  "paste_h": 245,
+  "trim_h": 1095,
+  "ratio": 0.224,
+  "top": 2720
+ },
+ {
+  "scene": "b10-sandy-sq",
+  "key": "sq_annoyed",
+  "unit": "squidward-annoyed_00001.png",
+  "paste_h": 855,
+  "trim_h": 1516,
+  "ratio": 0.564,
+  "top": 1675
+ },
+ {
+  "scene": "b10-sandy-sq",
+  "key": "sandy_l",
+  "unit": "sandy-left11_00001.png",
+  "paste_h": 765,
+  "trim_h": 1261,
+  "ratio": 0.607,
+  "top": 2025
+ },
+ {
+  "scene": "b11-pat-krabs",
+  "key": "krabs",
+  "unit": "krabs-open_00001.png",
+  "paste_h": 780,
+  "trim_h": 918,
+  "ratio": 0.85,
+  "top": 1940
+ },
+ {
+  "scene": "b11-pat-krabs",
+  "key": "patrick_r",
+  "unit": "patrick-right_00001.png",
+  "paste_h": 730,
+  "trim_h": 1532,
+  "ratio": 0.477,
+  "top": 2135,
+  "skin_specks": 0
+ },
+ {
+  "scene": "b12-sandy-sb-gary",
+  "key": "sandy_l",
+  "unit": "sandy-left11_00001.png",
+  "paste_h": 765,
+  "trim_h": 1261,
+  "ratio": 0.607,
+  "top": 1935
+ },
+ {
+  "scene": "b12-sandy-sb-gary",
+  "key": "sb_r",
+  "unit": "spongebob-c1_00001.png",
+  "paste_h": 610,
+  "trim_h": 860,
+  "ratio": 0.709,
+  "top": 2250
+ },
+ {
+  "scene": "b12-sandy-sb-gary",
+  "key": "gary",
+  "unit": "gary-front_00001.png",
+  "paste_h": 240,
+  "trim_h": 1095,
+  "ratio": 0.219,
+  "top": 2715
+ }
+]
