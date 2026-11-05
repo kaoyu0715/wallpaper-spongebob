@@ -1,0 +1,48 @@
+{
+  "generation": 4,
+  "date": "2026-11-05",
+  "issue": "#9",
+  "brief": "三角色互动构图双线对比：路线A官方图案背景 vs 路线B Krea2 实景海底",
+  "hard_constraints": {
+    "max_characters": 3,
+    "loRA_only": true,
+    "composition": "互动叙事，非一字并列"
+  },
+  "trio": {
+    "scene": "吹泡泡时光：海绵宝宝前排左吹泡泡并抬手指向泡泡，派大星前排右欢呼仰望泡泡，章鱼哥后排中间抱臂嫌弃——泡泡弧线串起三人视线",
+    "spongebob": {"lora": "sbp-r7.safetensors", "trigger": "spongebob squarepants", "seed": 20261211},
+    "patrick": {"lora": "Patrick_il.safetensors", "trigger": "p4tr1ckst4r", "seed": 20261222},
+    "squidward": {"lora": "squidward-v3.safetensors", "trigger": "squidward tentacles", "seed": 20261232}
+  },
+  "pipeline": {
+    "characters": "illustriousXL_v01 + CLIPSetLastLayer(-2) + 对应 LoRA，832x1216，30步 dpmpp_2m karras cfg7，白底提示词；每角色 3 seed 选优后 RMBG-2.0 抠图（收紧 alpha + 收边2px）",
+    "route_A_background": "程序绘制（bg-flat.py）：样张同款深绿纯色 (64,99,43) + 花朵轮廓图案（圆瓣收腰，样张同款配色）+ 底部沙地，无 Krea2",
+    "route_B_background": "Krea2DarkBeast3.0-bf16 + CLIPLoader type=krea2(qwen3vl_4b) + wan_2.1_vae，1440x3200，euler simple cfg1.0 28步，seed 20261202（20261201 备选）",
+    "compose": "compose-round4.py：三角色站位（后排章鱼哥、前排双人居左右）、倾角、接触阴影/微倒影/暖色统一仅用于路线B；官方风格泡泡带程序绘制；输出 1440x3200"
+  },
+  "scoring": {
+    "scale": "0-25 x A风格贴合官方 / B互动自然不重复 / C竖版构图 / D无畸变无文字",
+    "route_A_official": [
+      {"cand": "A-official-v1", "A": 24, "B": 22, "C": 23, "D": 24, "total": 93, "note": "站位均衡但集群感稍弱"},
+      {"cand": "A-official-v2", "A": 24, "B": 24, "C": 23, "D": 23, "total": 94, "selected": true, "note": "三人互相重叠遮挡最多、视线经泡泡互相牵引，互动最强"},
+      {"cand": "A-official-v3", "A": 24, "B": 21, "C": 22, "D": 24, "total": 91, "note": "派大星右移后与群体脱开"}
+    ],
+    "route_B_real": [
+      {"cand": "B-real-v1", "A": 22, "B": 22, "C": 22, "D": 23, "total": 89},
+      {"cand": "B-real-v2", "A": 22, "B": 24, "C": 22, "D": 23, "total": 91, "selected": true},
+      {"cand": "B-real-v3", "A": 22, "B": 21, "C": 22, "D": 23, "total": 88}
+    ],
+    "closer_to_sample": "路线A 官方图案背景。样张本体即平面插画语言（纯色+花朵轮廓+沙地+卡通泡泡），路线A逐项对应；路线B氛围好但实景底与样张风格语言不同。"
+  },
+  "style_drift": [
+    "派大星短裤带红色斑块（训练数据伪影，非官方设定）",
+    "海绵宝宝腿部偏细、鞋与腿略脱节（sbp-r7 走路姿态）",
+    "章鱼哥贴合官方，无明显漂移",
+    "路线B整体轻暖色调统一，平面角色与实景底混搭是既定设计"
+  ],
+  "next_round_focus": "聚焦路线A官方图案背景 + 泡泡三角互动构图继续迭代；下一轮优先修派大星短裤伪影（数据清洗重训或局部修复），可再试珊迪/蟹老板替换的互动场景（如抓水母、蟹堡配方）。",
+  "deliverables": {
+    "route_A": "delivery/generation-4-official.png (1440x3200, A-official-v2, 94)",
+    "route_B": "delivery/generation-4-real.png (1440x3200, B-real-v2, 91)"
+  }
+}
