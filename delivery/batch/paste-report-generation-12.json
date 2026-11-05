@@ -1,0 +1,289 @@
+[
+ {
+  "scene": "b01-sb-pat-bubbles",
+  "key": "pat_l",
+  "unit": "patrick-g5.png",
+  "paste_h": 885,
+  "trim_h": 1200,
+  "ratio": 0.738,
+  "top": 1885,
+  "skin_specks": 0
+ },
+ {
+  "scene": "b01-sb-pat-bubbles",
+  "key": "sb_r",
+  "unit": "sb-right12_00001.png",
+  "paste_h": 615,
+  "trim_h": 1184,
+  "ratio": 0.519,
+  "top": 2255,
+  "sb_leg_ratio": 0.68,
+  "sb_leg_ratio_raw": 0.752
+ },
+ {
+  "scene": "b02-sb-sq-pat-bubbles",
+  "key": "sq_front",
+  "unit": "squidward-g5.png",
+  "paste_h": 915,
+  "trim_h": 1138,
+  "ratio": 0.804,
+  "top": 1640
+ },
+ {
+  "scene": "b02-sb-sq-pat-bubbles",
+  "key": "pat_l",
+  "unit": "patrick-g5.png",
+  "paste_h": 885,
+  "trim_h": 1200,
+  "ratio": 0.738,
+  "top": 1905,
+  "skin_specks": 0
+ },
+ {
+  "scene": "b02-sb-sq-pat-bubbles",
+  "key": "sb_r",
+  "unit": "sb-right12_00001.png",
+  "paste_h": 615,
+  "trim_h": 1184,
+  "ratio": 0.519,
+  "top": 2255,
+  "sb_leg_ratio": 0.68,
+  "sb_leg_ratio_raw": 0.752
+ },
+ {
+  "scene": "b03-sandy-sb-hello",
+  "key": "sandy_l",
+  "unit": "sandy-left11_00001.png",
+  "paste_h": 810,
+  "trim_h": 1261,
+  "ratio": 0.642,
+  "top": 1890
+ },
+ {
+  "scene": "b03-sandy-sb-hello",
+  "key": "sb_r",
+  "unit": "sb-right12_00001.png",
+  "paste_h": 610,
+  "trim_h": 1184,
+  "ratio": 0.515,
+  "top": 2260,
+  "sb_leg_ratio": 0.68,
+  "sb_leg_ratio_raw": 0.752
+ },
+ {
+  "scene": "b04-krabs-sb-laugh",
+  "key": "krabs",
+  "unit": "krabs-open_00001.png",
+  "paste_h": 670,
+  "trim_h": 918,
+  "ratio": 0.73,
+  "top": 2030
+ },
+ {
+  "scene": "b04-krabs-sb-laugh",
+  "key": "sb_r",
+  "unit": "sb-right12_00001.png",
+  "paste_h": 610,
+  "trim_h": 1184,
+  "ratio": 0.515,
+  "top": 2265,
+  "sb_leg_ratio": 0.68,
+  "sb_leg_ratio_raw": 0.752
+ },
+ {
+  "scene": "b05-gary-sb-pet",
+  "key": "sb_r",
+  "unit": "sb-right12_00001.png",
+  "paste_h": 615,
+  "trim_h": 1184,
+  "ratio": 0.519,
+  "top": 2235,
+  "sb_leg_ratio": 0.68,
+  "sb_leg_ratio_raw": 0.752
+ },
+ {
+  "scene": "b05-gary-sb-pet",
+  "key": "gary",
+  "unit": "gary-front_00001.png",
+  "paste_h": 245,
+  "trim_h": 1095,
+  "ratio": 0.224,
+  "top": 2705
+ },
+ {
+  "scene": "b06-sq-sb-bubbles",
+  "key": "sq_front",
+  "unit": "squidward-g5.png",
+  "paste_h": 915,
+  "trim_h": 1138,
+  "ratio": 0.804,
+  "top": 1640
+ },
+ {
+  "scene": "b06-sq-sb-bubbles",
+  "key": "sb_r",
+  "unit": "sb-right12_00001.png",
+  "paste_h": 610,
+  "trim_h": 1184,
+  "ratio": 0.515,
+  "top": 2260,
+  "sb_leg_ratio": 0.68,
+  "sb_leg_ratio_raw": 0.752
+ },
+ {
+  "scene": "b07-sandy-sb-pat-cheer",
+  "key": "sandy_c",
+  "unit": "sandy-cheer11_00001.png",
+  "paste_h": 810,
+  "trim_h": 1099,
+  "ratio": 0.737,
+  "top": 1690
+ },
+ {
+  "scene": "b07-sandy-sb-pat-cheer",
+  "key": "pat_l",
+  "unit": "patrick-g5.png",
+  "paste_h": 885,
+  "trim_h": 1200,
+  "ratio": 0.738,
+  "top": 1905,
+  "skin_specks": 0
+ },
+ {
+  "scene": "b07-sandy-sb-pat-cheer",
+  "key": "sb_r",
+  "unit": "sb-right12_00001.png",
+  "paste_h": 615,
+  "trim_h": 1184,
+  "ratio": 0.519,
+  "top": 2245,
+  "sb_leg_ratio": 0.68,
+  "sb_leg_ratio_raw": 0.752
+ },
+ {
+  "scene": "b08-krabs-sb-pat",
+  "key": "krabs",
+  "unit": "krabs-open_00001.png",
+  "paste_h": 670,
+  "trim_h": 918,
+  "ratio": 0.73,
+  "top": 1830
+ },
+ {
+  "scene": "b08-krabs-sb-pat",
+  "key": "pat_l",
+  "unit": "patrick-g5.png",
+  "paste_h": 885,
+  "trim_h": 1200,
+  "ratio": 0.738,
+  "top": 1905,
+  "skin_specks": 0
+ },
+ {
+  "scene": "b08-krabs-sb-pat",
+  "key": "sb_r",
+  "unit": "sb-right12_00001.png",
+  "paste_h": 610,
+  "trim_h": 1184,
+  "ratio": 0.515,
+  "top": 2255,
+  "sb_leg_ratio": 0.68,
+  "sb_leg_ratio_raw": 0.752
+ },
+ {
+  "scene": "b09-gary-sb-pat",
+  "key": "pat_l",
+  "unit": "patrick-g5.png",
+  "paste_h": 885,
+  "trim_h": 1200,
+  "ratio": 0.738,
+  "top": 1875,
+  "skin_specks": 0
+ },
+ {
+  "scene": "b09-gary-sb-pat",
+  "key": "sb_r",
+  "unit": "sb-right12_00001.png",
+  "paste_h": 615,
+  "trim_h": 1184,
+  "ratio": 0.519,
+  "top": 2240,
+  "sb_leg_ratio": 0.68,
+  "sb_leg_ratio_raw": 0.752
+ },
+ {
+  "scene": "b09-gary-sb-pat",
+  "key": "gary",
+  "unit": "gary-front_00001.png",
+  "paste_h": 245,
+  "trim_h": 1095,
+  "ratio": 0.224,
+  "top": 2720
+ },
+ {
+  "scene": "b10-sandy-sq",
+  "key": "sq_annoyed",
+  "unit": "squidward-annoyed_00001.png",
+  "paste_h": 915,
+  "trim_h": 1516,
+  "ratio": 0.604,
+  "top": 1640
+ },
+ {
+  "scene": "b10-sandy-sq",
+  "key": "sandy_l",
+  "unit": "sandy-left11_00001.png",
+  "paste_h": 810,
+  "trim_h": 1261,
+  "ratio": 0.642,
+  "top": 1980
+ },
+ {
+  "scene": "b11-pat-krabs",
+  "key": "krabs",
+  "unit": "krabs-open_00001.png",
+  "paste_h": 670,
+  "trim_h": 918,
+  "ratio": 0.73,
+  "top": 2050
+ },
+ {
+  "scene": "b11-pat-krabs",
+  "key": "patrick_r",
+  "unit": "patrick-right_00001.png",
+  "paste_h": 885,
+  "trim_h": 1532,
+  "ratio": 0.578,
+  "top": 1980,
+  "skin_specks": 0
+ },
+ {
+  "scene": "b12-sandy-sb-gary",
+  "key": "sandy_l",
+  "unit": "sandy-left11_00001.png",
+  "paste_h": 810,
+  "trim_h": 1261,
+  "ratio": 0.642,
+  "top": 1890
+ },
+ {
+  "scene": "b12-sandy-sb-gary",
+  "key": "sb_r",
+  "unit": "sb-right12_00001.png",
+  "paste_h": 610,
+  "trim_h": 1184,
+  "ratio": 0.515,
+  "top": 2250,
+  "sb_leg_ratio": 0.68,
+  "sb_leg_ratio_raw": 0.752
+ },
+ {
+  "scene": "b12-sandy-sb-gary",
+  "key": "gary",
+  "unit": "gary-front_00001.png",
+  "paste_h": 240,
+  "trim_h": 1095,
+  "ratio": 0.219,
+  "top": 2715
+ }
+]
