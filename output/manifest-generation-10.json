@@ -1,0 +1,78 @@
+{
+  "round": 10,
+  "goal": "按 issue #21：清除派大星粉色皮肤上散落的暗红小点（Patrick_il 红色素泄漏），在 recipe §4.3 增加『派大星皮肤红点清理』一步并把『派大星皮肤无红点』加入 §5 C4 成品审计必检；其余全部延续九代配方（官方图案背景线、尺寸档、硬闸A/B、C5），批量 ≥10 张不同组合按 C1–C5 + 皮肤必检逐张审计，合格率对比九代 100%",
+  "recipe": "delivery/recipe.md（十代：§4.3 派大星固定后处理三件套→四件套（新增 clean_patrick_skin，置于 fix_patrick_outline 之前）；§5 C4 增加皮肤无红点必检；尺寸档/硬闸/其余规则与九代完全一致）",
+  "fix": {
+    "root_cause": "Patrick_il LoRA 红色素泄漏/数据伪影（与已修的描边偏红、短裤花斑同源）；皮肤散点在旧三件套（blue/blotches/outline）的清理范围之外",
+    "approach": "后处理，不改 LoRA：新增 patrick_skin.clean_patrick_skin——皮肤区内红度明显高于本图肤色中位数（动态阈值 R−G>肤色中位差+12 且 G<肤色中位−18）、面积 ≤400px、外围环带 ≥75% 为皮肤且不触碰半透明描边带的异常红孤岛，逐孤岛以环带肤色中位数+高斯扩散回填。眼睛/嘴/口腔红为大色块由面积上限排除，五官与描边不误伤",
+    "why_not_lora_change": "后处理一轮即把两个已验收派大星单元的全部散点清零（单元级 7+5 个 → 0），无需换 LoRA/降权重/重训；且四件套与既有三件套同为固定参数、可复现",
+    "order_rationale": "skin 置于 outline 之前：轮廓带内红点先回肤色，不留近黑残点；描边核心线面积大不受 skin 影响",
+    "detector": "patrick_skin.detect_patrick_specks（成品级自动化）：同判据、成品比例下检测被皮肤围合且不贴黑描线的红岛；贴线红碎屑归 C4 既有描边偏色检查口径"
+  },
+  "units": {
+    "regenerated": 0,
+    "reused_verified_units": [
+      "g7cut/spongebob-c1(七代胜出)",
+      "g7cut/patrick-g5(五代胜出，本轮起过四件套)",
+      "g7cut/squidward-g5(五代胜出)",
+      "g8cut/sandy-left(20261627)",
+      "g8cut/krabs-open(20261633)",
+      "g8cut/gary-front(20261642)",
+      "g8cut/patrick-right(20261661，本轮起过四件套)",
+      "g8cut/squidward-annoyed(20261653)",
+      "g9cut/sandy-cheer(20261902)"
+    ],
+    "patrick_unit_specks": {
+      "patrick-g5": "清理前散点 7 个（最大 214px）→ 清理后 0",
+      "patrick-right_00001": "清理前散点 5 个（最大 293px）→ 清理后 0"
+    }
+  },
+  "finals": {
+    "generated_versions": 12,
+    "passed": 12,
+    "pass_rate": "12/12 = 100%（与九代持平）",
+    "scene_table": "沿用九代 SCENES（12 个不同角色组合、站位、尺寸档、泡泡带完全一致），唯一变化 = 派大星单元多过 skin 一步",
+    "skin_check": {
+      "r9_before_total_specks": 40,
+      "r10_after_total_specks": 0,
+      "per_scene": {
+        "b01-sb-pat-bubbles": "r9=7 → r10=0",
+        "b02-sb-sq-pat-bubbles": "r9=7 → r10=0",
+        "b07-sandy-sb-pat-cheer": "r9=7 → r10=0",
+        "b08-krabs-sb-pat": "r9=7 → r10=0",
+        "b09-gary-sb-pat": "r9=7 → r10=0",
+        "b11-pat-krabs": "r9=5 → r10=0"
+      },
+      "manual_100pct": "6 张派大星皮肤区 100% 裁切（output/evidence/audit10/*-skin.png）+ 关键区域 3x 放大逐点复核：皮肤均匀粉色、无散点；眼/嘴/舌/短裤/描边无回色损伤",
+      "note": "凹角与描线内侧的红色 AA 碎屑（描边偏色类，九代人工验收既过）按定义不计皮肤散点，仍受 C4 描边检查约束——实测与九代同参数同结果、无回退"
+    },
+    "passing": [
+      "b01-sb-pat-bubbles",
+      "b02-sb-sq-pat-bubbles",
+      "b03-sandy-sb-hello",
+      "b04-krabs-sb-laugh",
+      "b05-gary-sb-pet",
+      "b06-sq-sb-bubbles",
+      "b07-sandy-sb-pat-cheer",
+      "b08-krabs-sb-pat",
+      "b09-gary-sb-pat",
+      "b10-sandy-sq",
+      "b11-pat-krabs",
+      "b12-sandy-sb-gary"
+    ],
+    "rejects": [],
+    "gates": {
+      "hard_gate_A": "蟹老板贴入比顶格 0.85x 通过（代码强制，paste-report 复核）",
+      "hard_gate_B": "4 张含珊迪成品头盔 100% 裁切（output/evidence/audit10/*-helmet.png）盔圈全部闭合",
+      "C5": "全员贴入高在 §4.2 九代新档区间内；角色最高点均低于 50% 高度线（TOP_FLOOR 代码自检通过）；背景与九代逐像素一致",
+      "paste_ratio_max": {"krabs": "0.85x", "sq_front": "0.76x", "sandy_c": "0.717x", "sb_r": "0.715x", "sandy_l": "0.632x", "pat_l": "0.621x", "sq_annoyed": "0.564x", "patrick_r": "0.483x", "gary": "0.224x"}
+    }
+  },
+  "evidence": {
+    "overview": "output/evidence/r10-overview.jpg",
+    "final_before_after": "output/evidence/r10-skin-before-after.jpg（r9 vs r10 同场景派大星区域）",
+    "unit_before_after": "output/evidence/r10-unit-before-after.png（patrick-g5 单元 100%）",
+    "audit10": "output/evidence/audit10/（6 skin + 4 helmet 100% 裁切）",
+    "paste_report": "output/evidence/paste-report-generation-10.json"
+  }
+}
