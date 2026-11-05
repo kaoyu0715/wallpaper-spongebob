@@ -1,0 +1,83 @@
+{
+  "round": 9,
+  "goal": "按 issue #19：人物整体缩小到样张档（新尺寸档写回 recipe §4.2）+ 两条硬闸进 recipe §5（蟹老板贴入比强制 ≤0.85x、珊迪头盔完整性必检），批量 ≥10 张不同组合并按 C1–C4 + C5（新样张档）逐张审计，合格率对比八代 80%",
+  "recipe": "delivery/recipe.md（九代固化版：§4.2 新尺寸档、§5 硬闸A/B 与 C5）",
+  "scale_calibration": {
+    "sample": "review/reference/target-ref.jpg（堆叠群像样张：单体角色高度多在画面 21%–28% 档，主角顶部约 22%–60%）",
+    "round8_problem": "八代主角全高 25%–36%、顶部顶到下半屏上沿，人物整体偏大、上方留白不足",
+    "new_tier": "八代官方比例整体 ×0.76（SB 600–630 / 珊迪 750–790 / 派大星 730–765 / 蟹老板 770–790 / 章鱼哥 845–885 / 小蜗 230–255 px），各角色官方相对比例不变；批量 12 场景一次标定通过，为稳定档位"
+  },
+  "hard_gates": {
+    "A_krabs_max_ratio": "蟹老板贴入比强制 ≤0.85x——compose-round9.py 代码强制（超闸 SystemExit）；九代单元裁后 918px、贴入 780px 顶格 0.85x 通过。对症八代 rej1/rej2（1.18x/1.14x 超尺寸）",
+    "B_sandy_helmet": "珊迪头盔完整性必检——单元级盔圈闭合必检 + 成品级每张自动导出头盔区 100% 裁切（output/audit9/）复核。九代按此弃 5 个种子、改用新种子 20261902；4 张含珊迪成品盔圈全部闭合。对症八代 rej3（盔圈右上缺弧）"
+  },
+  "units_generated": {
+    "total_new": 6,
+    "chosen": {
+      "sandy-cheer": "20261902（盔圈闭合、双臂欢呼姿态、无怪道具；手套旁一根细弧线与样张泡泡高光笔触同类，沿八代单元先例保留）"
+    },
+    "reused_verified_units": [
+      "g7cut/spongebob-c1(七代胜出)",
+      "g7cut/patrick-g5(五代胜出)",
+      "g7cut/squidward-g5(五代胜出)",
+      "g8cut/sandy-left(20261627)",
+      "g8cut/krabs-open(20261633)",
+      "g8cut/gary-front(20261642)",
+      "g8cut/patrick-right(20261661)",
+      "g8cut/squidward-annoyed(20261653)"
+    ],
+    "seed_verdicts_rejects": {
+      "20261901": "fail C4: 手套心形红斑 + 胸前红色色块伪影",
+      "20261903": "弃: 双臂下垂非欢呼姿态，盔体比例偏小",
+      "20261904": "fail C4: 胸前红色矩形色斑伪影",
+      "20261905": "fail C4: 脖颈过长畸形、眼位偏移",
+      "20261906": "fail C1/C4: 盔顶红球怪道具 + 胸甲红带非官方配色"
+    },
+    "unit_stage_note": "新出 6 个种子仅 1 个过闸（八代复用单元 8 个全部沿用），单元级淘汰不影响成品级合格率口径"
+  },
+  "finals": {
+    "generated_versions": 12,
+    "passed": 12,
+    "pass_rate": "12/12 = 100%（八代 12/15 = 80%）",
+    "rate_note": "八代 3 个失败版本（2 超尺寸 + 1 盔圈缺弧）全部发生在成品级；九代新尺寸档 + 硬闸A/B 在合成前/合成中即消除这两类失败源，成品级零淘汰。代价在单元级：珊迪欢呼角色重出 6 个种子",
+    "passing": [
+      "b01-sb-pat-bubbles",
+      "b02-sb-sq-pat-bubbles",
+      "b03-sandy-sb-hello",
+      "b04-krabs-sb-laugh",
+      "b05-gary-sb-pet",
+      "b06-sq-sb-bubbles",
+      "b07-sandy-sb-pat-cheer",
+      "b08-krabs-sb-pat",
+      "b09-gary-sb-pat",
+      "b10-sandy-sq",
+      "b11-pat-krabs",
+      "b12-sandy-sb-gary"
+    ],
+    "rejects": [],
+    "scale_report_max": {
+      "海绵宝宝": "0.72x",
+      "派大星": "0.62x",
+      "章鱼哥": "0.76x",
+      "珊迪": "0.72x",
+      "蟹老板": "0.85x（硬闸A顶格）",
+      "小蜗": "0.22x"
+    },
+    "margin_report": "九代全员最高点 y ≥ 画面 50% 高度线（TOP_FLOOR=1600）、主角顶部 ≥52%（自顶部起算）；八代最高角色顶点曾达 43%–48% 高度（b02 章鱼哥 43.4%、b07 珊迪 47.8%），本轮全部下移一档",
+    "audit_note": "逐张全幅 + 关键区域 100% 裁切复核（海绵宝宝四指/两鞋、派大星短裤三件套、蟹老板双眼柄/钳、小蜗眼柄两根、珊迪盔圈闭合 4/4）；贴入比与站位核对 output/round9/paste-report.json；盔圈裁切存档 output/audit9/"
+  },
+  "combos_covered": [
+    "SB+派大星",
+    "SB+章鱼哥+派大星",
+    "SB+珊迪",
+    "SB+蟹老板",
+    "SB+小蜗",
+    "SB+章鱼哥",
+    "SB+珊迪+派大星",
+    "SB+蟹老板+派大星",
+    "SB+派大星+小蜗",
+    "珊迪+章鱼哥",
+    "派大星+蟹老板",
+    "SB+珊迪+小蜗"
+  ]
+}
