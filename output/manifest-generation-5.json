@@ -1,0 +1,53 @@
+{
+  "generation": 5,
+  "date": "2026-11-05",
+  "issue": "#11",
+  "brief": "锁定路线A官方图案背景；修四代派大星短裤红斑；三角色互动构图继续对齐样张",
+  "hard_constraints": {
+    "route": "official patterned background only (realistic route paused)",
+    "max_characters": 3,
+    "loRA_only": true,
+    "composition": "互动叙事，非一字并列",
+    "patrick_shorts": "纯色无红斑"
+  },
+  "trio": {
+    "scene": "追泡泡：海绵宝宝左前吹泡泡抬手指天示意，泡泡带掠过章鱼哥头顶（泡泡落在他鼻子和头上，他叉腰嫌弃），飘向右前仰头大笑、张臂欲接的派大星——三人视线经泡泡串成一个场景",
+    "spongebob": {"lora": "sbp-r7.safetensors", "trigger": "spongebob squarepants", "seed": 20261342,
+      "note": "issue 指定的 sbpilot 4 seed 全数畸变（红帽/面部灰斑/蓝衬衫/黑鞋糊块），退回同为海绵宝宝专属 LoRA 的 sbp-r7（四代同款）"},
+    "patrick": {"lora": "Patrick_il.safetensors", "trigger": "p4tr1ckst4r", "seed": 20261323,
+      "note": "5 seed 里选短裤最干净的一张，再经孤岛回填+右缝紫条定向清理，成品纯色无斑"},
+    "squidward": {"lora": "squidward-v3.safetensors", "trigger": "squidward tentacles", "seed": 20261333,
+      "note": "叉腰嫌弃，官方比例，无漂移"}
+  },
+  "patrick_blotch_fix": {
+    "strategy": "选种（seed 20261321/23 短裤接近干净，四代所选 20261222 正是带斑种子）+ compose-round5.py 内置孤岛回填（绿区封闭异色孤岛 → 短裤中位色）+ 右缝紫条定向矩形清理",
+    "result": "fixed",
+    "verification": "1440x3200 全分辨率目检短裤区域：无红/紫/蓝斑，纯色"
+  },
+  "pipeline": {
+    "characters": "illustriousXL_v01 + CLIPSetLastLayer(-2) + 对应 LoRA，832x1216，30步 dpmpp_2m karras cfg7，白底提示词；每角色 3-5 seed 选优后 RMBG-2.0 抠图（收紧 alpha + 收边2px）",
+    "background": "bg-flat.py（沿用四代）：样张同款深绿 (64,99,43) + 花朵轮廓图案 + 沙地；compose 中沙地加高至 ry690（样张沙层更厚）",
+    "compose": "compose-round5.py：三角色集群放大约 1.3x 并上移，倾角制造动势；泡泡带 + 样张式散点泡泡场（线环+小实心点两种官方样式）；输出 1440x3200"
+  },
+  "scoring": {
+    "scale": "0-25 x A风格贴合官方 / B互动自然不重复 / C竖版构图 / D无畸变无文字且派大星短裤无红斑",
+    "route_A_official": [
+      {"cand": "A5-official-v1", "A": 24, "B": 21, "C": 23, "D": 24, "total": 92, "note": "站位清晰但集群松散，视线牵引弱"},
+      {"cand": "A5-official-v2", "A": 24, "B": 23, "C": 23, "D": 23, "total": 94, "note": "重叠更强但中部略挤，派大星头部叠章鱼哥躯干轮廓略含糊"},
+      {"cand": "A5-official-v3", "A": 24, "B": 24, "C": 24, "D": 24, "total": 96, "selected": true, "note": "倾角动势+三人互叠，泡泡落章鱼哥鼻/头成笑点，视线链海绵宝宝→泡泡→派大星，沙地加厚贴样张"}
+    ],
+    "closer_to_sample": "较四代进一步提升：角色集群更大更居中（样张本体即中部大集群）、沙层加厚、上半部补样张式线环泡泡场；绿底+花朵轮廓+官方赛璐璐语言不变"
+  },
+  "style_drift": [
+    "派大星短裤红斑：已修复（本轮交付全分辨率目检无斑）",
+    "派大星描边偏红（Patrick_il 训练数据伪影），与另两角色的黑描边不完全一致",
+    "海绵宝宝泡泡棒被 LoRA 画成冰棒/麦克风状道具，形状不官方",
+    "sbpilot LoRA 不稳（帽子/面部灰斑/服装漂移 4/4 畸变），退回 sbp-r7 出品干净",
+    "章鱼哥贴合官方，无漂移"
+  ],
+  "next_round_focus": "派大星建议重训（清数据+黑描边规范化）；角色可试样张同款组合（蟹老板+海绵宝宝持蟹堡配方、珊迪入泡泡），进一步贴样张叙事焦点；泡泡互动已验证为稳定强项，可保留。",
+  "deliverables": {
+    "delivery": "delivery/generation-5.png (1440x3200, A5-official-v3, 96)",
+    "machine_side_candidates": "review/round5/A5-official-v1..3.png"
+  }
+}
