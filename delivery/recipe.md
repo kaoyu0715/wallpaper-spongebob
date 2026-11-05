@@ -1,10 +1,13 @@
-# 壁纸生产配方（十代固化版）
+# 壁纸生产配方（十一代固化版）
 
 > 来源：五～七代「官方图案背景线」收敛结论（PR #12 / #14 / #16，issue #11/#13/#15）；
 > 八代批量固化（PR #18，issue #17）；九代尺寸档下调与两条硬闸（issue #19）；
-> 十代派大星皮肤红点清理进 §4.3 四件套与 §5 C4 必检（issue #21）。
-> 本文件是**可复现交付配方**：照此执行即可稳定产出合格壁纸。九代批量生产（`delivery/batch/` 内 r9-* ）按九代版执行，
-> 十代批量生产（`delivery/batch/` 内 r10-* ）按本配方执行。
+> 十代派大星皮肤红点清理进 §4.3 四件套与 §5 C4 必检（issue #21）；
+> **十一代以样张为唯一标准的自进化逼近（issue #23）：簇状叠压场景表 + 聚拢沙岛 + 样张档大泡泡
+> （alpha 叠加修复）+ 海绵宝宝单元调色（sb_palette）+ 珊迪透明盔/露齿露舌新单元 + 盔圈粉花 +
+> 成品级红岛回填（patrick_postclean），差距清单与逐轮记录见 `delivery/batch/gap-analysis-round11.md`。**
+> 本文件是**可复现交付配方**：照此执行即可稳定产出合格壁纸。八/九/十代批量产物分别按当代版本
+> 执行（r8-*/r9-*/r10-*）；十一代批量生产（`delivery/batch/` 内 r11-*）按本配方执行。
 
 合格硬标准（每张必须全满足，缺一判不合格）：
 
@@ -22,9 +25,9 @@
 ```
 ① 逐角色单元出图（illustriousXL + 角色专属 LoRA，单人白底）
 ② RMBG-2.0 抠图 + alpha 收紧          → 无白色 halo
-③ 程序绘制官方图案背景（bg-flat.py）    → 样式 100% 可控、无 AI 伪影
-④ 合成（compose-round8.py）：定向回色/清斑 → 贴入 → 泡泡带串视线
-⑤ 按 C1–C4 逐张审（关键区域 100% 放大复核）
+③ 程序绘制官方图案背景（bg-flat11.py）  → 样式 100% 可控、无 AI 伪影（十一代：花形描边加粗向样张靠拢）
+④ 合成（compose-round11.py）：定向回色/清斑/调色 → 簇状叠压贴入 → 盔圈粉花 → 样张档泡泡带串视线
+⑤ 按 C1–C5 逐张审（关键区域 100% 放大复核；派大星皮肤红岛成品级回填复检，见 §4.4）
 ```
 
 要点：**风格与构图靠程序保证，角色质量靠“单人小场景 + 种子选优”保证。**
@@ -85,10 +88,10 @@ hands in pockets, holding object, cropped, cut off, out of frame, partial body
 
 | 角色 | LoRA | 权重(model/clip) | 触发词 | 备注（为什么用/注意什么） |
 |---|---|---|---|---|
-| 海绵宝宝 | `sbpilot.safetensors` | **0.85** | `spongebob squarepants` | 七代胜出：单角色训练、caption 即 §1.1 特征词，无互串；多角色版 sbp-r7 在新姿态下持续互串（粉头/绿箭头/海绵块手）。权重 0.85 压蓝色袖泄漏。**已知轻微漂移**：手指偏细长、头部外缘一圈浅绿描边——手机尺寸不显眼，七代人工验收通过 |
+| 海绵宝宝 | `sbpilot.safetensors` | **0.85** | `spongebob squarepants` | 七代胜出：单角色训练、caption 即 §1.1 特征词，无互串；多角色版 sbp-r7 在新姿态下持续互串（粉头/绿箭头/海绵块手）。权重 0.85 压蓝色袖泄漏。**十一代**：单元贴入前另过 `sb_palette.sb_palette` 四步调色（淡黄绿→样张官黄 / 亮绿气孔→橄榄 / 外缘灰白 AA 晕→描边近黑 / 灰白眼球衬衫→纯白，§4.3a）；新出露舌种子 3 个均未过单元审计，维持七代胜出单元 |
 | 派大星 | `Patrick_il.safetensors` | 1.0 | `p4tr1ckst4r` + `official style` | 出图**必带** §4 四件套清理（红描边回正 + 短裤花斑/蓝彩条回填 + 皮肤红点回填，十代起），数据伪影固定、清理参数固定 |
 | 章鱼哥 | `squidward-v3.safetensors` | 1.0 | `squidward tentacles` | 五~七代零漂移 |
-| 珊迪 | `Sandy_il.safetensors` | 1.0 | `sandycheeks` | 训练集带 `pink flower` 高频 tag，负面里保留 `flower, plants` 防花形漂浮物 |
+| 珊迪 | `Sandy_il.safetensors` | 1.0 | `sandycheeks` | **十一代换单元**（G5：样张头盔=透明罩+白圈，旧单元为灰玻璃穹顶+大白高光块）：prompt 显式 `helmet interior fully transparent, only a plain thin white helmet ring, no grey glass fill, no big white reflection patches` + `wide open laughing mouth showing two upper buck teeth and pink tongue`（`gen-round11.py`），cheer11 出 4 种子、left11 出 3 种子，按 §5 单元审计（含硬闸B）选 **20263004（cheer）/ 20263013（left）**，g11cut。两粒种子带亮红小球伪影，由 §4.3b `clean_sandy_ball` 固定流程清除。训练集带 `pink flower` 高频 tag，负面保留 `flower, plants` 防杂物 |
 | 蟹老板 | `krabs-v3.safetensors` | 1.0 | `eugene krabs` | 训练集含“抱钱云(美元符号)”→ 负面排 `money/dollar sign/coins/money bag` 防怪道具 |
 | 小蜗 | `gary-v3.safetensors` | 1.0 | `gary the snail` | 审计点：眼柄恰好两根、壳完整 |
 
@@ -100,11 +103,16 @@ hands in pockets, holding object, cropped, cut off, out of frame, partial body
 
 ## 4. 背景与合成
 
-### 4.1 官方图案背景（`bg-flat.py`，程序绘制，非生成）
+### 4.1 官方图案背景（`bg-flat11.py`，程序绘制，非生成）
 
 - 底色深绿 `(64,99,43)`、沙地 `(216,196,140)`、沙地描边 `(88,104,44)`——全部采样自样张 `target-ref.jpg`。
 - 花朵云形轮廓 11 朵沿边缘与上半部排布（样张同款位置、6 色、高斯腐蚀描边不产生凹角伪影），中部角色区留空；
-  白色小气泡圈散布上半部；底部沙地椭圆出血。
+  **十一代描边加粗（R*0.085→R*0.12、alpha 235→250）向样张的粗笔触轮廓靠拢（G8）**。
+- **沙地为"聚拢沙岛"而非通栏横带（G2，十一代）**：合成层绘制椭圆 cx720/cy2830/rx520/ry330
+  （顶缘≈2500、完整下缘、两侧不到画缘），与样张角色脚下沙岛同形；深绿底+花纹在岛屿四周露出。
+- **泡泡一律画在独立 overlay 层再 alpha_composite（`draw_bubbles11`）**：PIL ImageDraw 直接画在
+  RGBA 画布上是替换像素而非 alpha 混合，泡泡内部会呈不透明浅盘；样张泡泡内部透出背景
+  （十一代发现并修复的管线缺陷）。场泡 ~10 个、大圆环 r25–90 + 左上弧高光，聚于角色簇上方两侧（G4）。
 - **背景直接画在 1440x3200 画布上**，成品原生 1440x3200，**全程无放大环节**（C4 的分辨率保证来自这里，不走 Remacri）。
 
 ### 4.2 贴入规则（C3“别放大过度”的硬约束）
@@ -129,9 +137,17 @@ hands in pockets, holding object, cropped, cut off, out of frame, partial body
   sandy_l 1210 / sandy_c 1060 / krabs 918 / gary 1095。新档下全场景贴入比 ≤0.85x，天然远离“超尺寸”失败类。
   （`compose-round9.py` 另含单元预处理 `drop_stray_specks`：清除抠图中与主体不相连的孤立碎线/碎块，防漂浮怪道具。）
 - **C5 留白自检**：新档下主角顶部 ≥ 画面 52% 高度、全员最高点（含头盔/眼柄）≥ 50% 高度线以下起（`compose-round9.py` 的 `TOP_FLOOR` 硬校验），上方与四周留出更多官方图案背景空间。
-- 站位/倾角：后排 `ground_y≈2530–2610`，前排 `2785–2960`；±3–5° 倾角制造动势；z 序 后→前 显式声明。
-  站位向簇心收拢（相邻角色 cx 较八代间距约收紧 15%），角色缩小后仍保持围合叠压与手部关联，不散成并列。
-- **C2 互动靠三件事**：① 视线方向（各单元生成时用 looking-to 对齐对手）；② 前后叠压与间距（集群围合，不并列）；③ 泡泡带——程序绘制样张同款线环泡泡+小实心点，从一侧角色升起、掠过中间角色、落到另一侧伸出的手/头，串起视线链。**除泡泡外不加任何道具**（C4 防怪道具）。
+- ~~站位/倾角（八~十代）：后排 `ground_y≈2530–2610`，前排 `2785–2960`；站位向簇心收拢
+  （cx 较八代收紧 15%）~~ ——十一代重写为下述簇状群像三原则。
+- **站位/倾角（十一代簇状群像，G1/G7）**：样张的观感核心是**前后叠压的竖排群像**而非一字并列。
+  SCENES11（`compose-round11.py`）三原则：① 簇心收拢——同景角色 cx 间距收到 ~280–360（十代 500+），
+  身体边缘自然叠压 60–160px（只叠体侧/手臂，主要肢体保持可辨，C3 不违）；② 后排上站台——
+  后排 `ground_y≈2470–2560`（脚落沙岛顶缘）、前排 `2760–2880`、小蜗前景 `2950+`，头顶高度错开；
+  ③ z 序显式：表内顺序=贴入顺序=后→前，后排先贴被前排压住，形成样张式堆叠。±3–5° 倾角制造动势。
+- **C2 互动靠三件事**：① 视线方向（各单元生成时用 looking-to 对齐对手）；② **身体叠压**与间距
+  （簇状围合，十一代起不再是"并列+泡泡"）；③ 泡泡带——overlay 层样张档大圆环+左上弧高光，
+  从一侧角色升起、掠过中间角色头顶、落到另一侧，串起视线链；**路线避开盔圈圆环**，
+  避免同心相碰（十一代实测修正）。**除泡泡外不加任何道具**（C4 防怪道具）。
 
 ### 4.3 派大星固定后处理四件套（顺序不可换）
 
@@ -146,6 +162,34 @@ hands in pockets, holding object, cropped, cut off, out of frame, partial body
    描边核心 (227,85,70) 全量回色、皮肤粉不动、口腔红在带外不受影响。
 （顺序原因：先 blue 再 blotches，否则 blotches 级联留橄榄 AA 圈、blue 空转；skin 在 outline **之前**，
 轮廓带内的红点先回肤色、不留近黑残点，描边核心线面积大不受 skin 影响。参数即 PR #14/#16 固化值 + 十代新增。）
+
+### 4.3a 海绵宝宝固定调色（十一代新增，G3，`sb_palette.py`，单元贴入前执行）
+
+对症样张对比结论"淡黄绿、气孔发荧光绿、外缘浅绿描边晕、眼球/衬衫发灰"。四步、固定参数、
+颜色锚点全部采样自样张海绵宝宝区域：
+
+1. 身体淡黄绿 (≈240,240,110) → 样张官黄 (≈240,224,64)：掩膜内 `G -= 0.12*(G-B)`、`B *= 0.55`；
+2. 气孔亮绿 (≈110,160,30) → 样张橄榄绿 (≈172,156,44)：0.72 向样张色混合；
+3. 外缘灰白 AA 晕 → 描边近黑 (20,18,16)：距轮廓 3px 内、低饱和亮像素按亮度加权回色。
+   **根因修正**：十代配方 §2 记为"LoRA 浅绿描边漂移"的观感，实测为 RMBG 灰白 AA 边缘贴深绿
+   背景的呈色——回描边黑即消除，兼得样张的粗描边观感；
+4. 灰白（眼球/衬衫，S<0.12 且 200≤V≤246）→ 纯白 250。
+
+### 4.3b 珊迪单元清理与盔圈粉花（十一代新增，G5）
+
+- `clean_sandy_ball`（compose-round11 内，g11cut 单元自动执行）：种子伪影"亮红小球"
+  （cheer11 悬盔圈外、left11 骑盔圈线）→ 与盔圈淡色像素相邻的部分按最近环带像素逐层回填
+  （≤7 轮≈线宽，盔圈保持闭合、硬闸B 可过），其余透明化。判据=上半部高饱和正红小连通块，
+  不误伤舌头/口腔粉。
+- `draw_helmet_flower`（合成层，贴入珊迪后执行）：盔圈左上方程序绘制样张同款粉花
+  （5 粉瓣 + 橙心 + 深粉描边，位置/半径按贴入高比例）。**判定：花是样张珊迪造型标志，非道具**
+  （C4"无怪道具"针对 LoRA 泄漏杂物）。
+
+### 4.4 派大星红岛成品级回填（十一代新增，R4，`patrick_postclean`）
+
+贴入 LANCZOS 缩放后，派大星描边与**白色衣物**交界处可产生 4–6px 红色 AA 小岛——被皮肤围合、
+不贴黑描线（十代检测的免检条件是"贴黑线"，故未覆盖）。皮肤必检时机沿用十代口径（贴入后、
+泡泡/道具绘制前），检出即以其环带皮肤中位色回填、复检归 0 后存档裁切。固定流程可复现。
 
 ## 5. 审计规程（单元级 + 成品级）
 
@@ -170,7 +214,7 @@ hands in pockets, holding object, cropped, cut off, out of frame, partial body
 | C1 | 与样张并排比：底色/花朵/沙地同款、角色为官方画风、无 3D/写实感 |
 | C2 | 角色数 ≤3；视线两两相关、有前后叠压与共同焦点；泡泡带存在（如用） |
 | C3 | 海绵宝宝双臂双手双腿、逐指可辨、恰好两只鞋；所有角色无缺件；贴入比 ≤1.0x（脚本打印报告核对） |
-| C4 | 描边无偏色（尤其派大星外缘）、**派大星皮肤无红点**（十代新增，issue #21：皮肤区无暗红散点，`patrick_skin.detect_patrick_specks` 程序化残留计数须为 0，含派大星场景另存皮肤区 100% 裁切 `output/audit10/<scene>-<unit>-skin.png` 逐张人工复核）、无漂浮怪道具、无文字/水印、无畸变、尺寸恰 1440x3200 |
+| C4 | 描边无偏色（尤其派大星外缘）、**派大星皮肤无红点**（十代新增，issue #21：皮肤区无暗红散点，`patrick_skin.detect_patrick_specks` 程序化残留计数须为 0；**十一代口径**：检测限定在派大星贴入 footprint 掩膜内——排除裁切框罩住的邻角粉舌等假阳性——检出先经 §4.4 `patrick_postclean` 回填清零再复检存档，含派大星场景另存皮肤区 100% 裁切 `audit11/<scene>-<unit>-skin.png` 逐张人工复核）、无漂浮怪道具（**珊迪盔圈粉花为样张标志装饰、不算道具**，§4.3b）、无文字/水印、无畸变、尺寸恰 1440x3200 |
 | **C5** | **人物尺寸=新样张档**：全员贴入高在 §4.2 九代新档区间内；主角顶部 y ≥52% 高度、全员最高点 y ≥50% 高度线（自画面顶部起算，`paste-report.json` + `TOP_FLOOR` 核对）；上方与四周图案背景留白充分，向样张占比靠拢或更疏朗 |
 | **闸A** | 蟹老板贴入比 ≤0.85x（代码强制 + 报告复核） |
 | **闸B** | 珊迪每张：盔圈闭合完整（100% 头盔裁切图复核，存档 `output/audit9/`） |
@@ -180,15 +224,16 @@ hands in pockets, holding object, cropped, cut off, out of frame, partial body
 ## 6. 复现步骤
 
 ```bash
-# ① 单元出图（ComfyUI 需在 127.0.0.1:8188，模型见 §1/§2；已验收单元可直接复用）
-python3 gen-round9.py char --role sandy-cheer --seeds <s1>,<s2>,...   # 每角色 3–5 seed
-# ② 人工按 §5 单元审计（含硬闸B 盔圈必检）选种子后抠图
-python3 gen-round9.py rmbg --role sandy-cheer --keep <选中文件>
-# ③ 背景
-python3 bg-flat.py --out <bg.png>                                   # 1440x3200
-# ④ 合成（场景表在 compose-round9.py 的 SCENES 内：新档高度 + 硬闸A/B + C5 自检；
-#    十代起用 compose-round10.py 复用同一场景表，仅 §4.3 扩为四件套含皮肤红点回填）
-python3 compose-round10.py --bg <bg.png> --scene <scene-id>|all --outdir output/round10
-# ⑤ 按 §5 成品审计（C1–C5 + 闸A/闸B + C4 皮肤必检，paste-report.json、audit10 裁切图与
-#    detect_patrick_specks 残留计数核对）；合格图收进 delivery/batch/
+# ① 单元出图（ComfyUI 需在 127.0.0.1:8188，模型见 §1/§2；已验收单元可直接复用。
+#    十一代新单元用 gen-round11.py：sandy-cheer11 / sandy-left11 / sb-right11 透明盔+露舌 prompt）
+python3 gen-round11.py char --role sandy-cheer11 --seeds <s1>,<s2>,...   # 每角色 3–5 seed
+# ② 人工按 §5 单元审计（含硬闸B 盔圈必检）选种子后抠图 → g11cut
+python3 gen-round11.py rmbg --role sandy-cheer11 --keep <选中文件>
+# ③ 背景（十一代：花形描边加粗；沙岛在合成层绘制）
+python3 bg-flat11.py --out <bg.png>                                   # 1440x3200
+# ④ 合成（场景表在 compose-round11.py 的 SCENES11 内：簇状群像 + 沙岛 + 样张档泡泡 +
+#    硬闸A/B + C5 自检；sb_palette / clean_sandy_ball / 盔圈粉花 / patrick_postclean 全部内联）
+python3 compose-round11.py --bg <bg.png> --scene <scene-id>|all --outdir output/round11 --sandy-new
+# ⑤ 按 §5 成品审计（C1–C5 + 闸A/闸B + C4 皮肤必检，paste-report-generation-11.json、
+#    audit11 裁切图与残留计数核对）；合格图收进 delivery/batch/
 ```
