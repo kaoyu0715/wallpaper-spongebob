@@ -1,0 +1,94 @@
+{
+  "round": 8,
+  "goal": "批量验证并固化五~七代配方（delivery/recipe.md），≥10 张不同角色组合，逐张四条硬标准审计",
+  "recipe": "delivery/recipe.md",
+  "units_generated": {
+    "total": 30,
+    "chosen": {
+      "sb-left": "20261603（池备用，未用于本批）",
+      "patrick-right": "20261661（第2轮修正 prompt 后）",
+      "sandy-cheer": "20261623（盔圈右上缺弧，合成期按样张细线补全）",
+      "sandy-left": "20261627",
+      "krabs-open": "20261633",
+      "gary-front": "20261642",
+      "squidward-annoyed": "20261653（用于 b10）"
+    },
+    "reused_verified_units": [
+      "g7cut/spongebob-c1(七代胜出)",
+      "g7cut/patrick-g5(五代胜出)",
+      "g7cut/squidward-g5(五代胜出)"
+    ],
+    "seed_verdicts_rejects": {
+      "20261601": "fail: 举手触边+腋部伪影",
+      "20261602": "fail: 双手交叠",
+      "20261604": "fail: 四齿+绿条纹袜漂移",
+      "20261611-14": "fail: 短裤紫色（prompt 失误 purple shorts，官方为绿色；4 seed 同因）",
+      "20261662": "弃: 短裤深绿块",
+      "20261663": "弃: 短裤蓝花斑(可洗但弃选)",
+      "20261664": "弃: 腿部交叠姿态",
+      "20261621": "fail: 彩虹背景+半透盔难抠",
+      "20261622": "fail: 手臂钩状、手套糊",
+      "20261624": "fail: 盔圈过大+盔内红三角伪影",
+      "20261626": "fail: 靴底红块伪影+手套与盔圈穿插",
+      "20261631": "fail: 头顶蓝布怪道具+地面小蟹群",
+      "20261632": "fail: 小怪道具(抱小龙虾)+衬衫红条伪影",
+      "20261644": "fail: 壳变蓝色(偏色)"
+    }
+  },
+  "finals": {
+    "generated_versions": 15,
+    "passed": 12,
+    "pass_rate": "12/15 = 80%（三个场景首版不合格，修正后重合成达标；若按最终 12 场景口径为 12/12）",
+    "passing": [
+      "b01-sb-pat-bubbles",
+      "b02-sb-sq-pat-bubbles",
+      "b03-sandy-sb-hello",
+      "b04-krabs-sb-laugh",
+      "b05-gary-sb-pet",
+      "b06-sq-sb-bubbles",
+      "b07-sandy-sb-pat-cheer",
+      "b08-krabs-sb-pat",
+      "b09-gary-sb-pat",
+      "b10-sandy-sq",
+      "b11-pat-krabs",
+      "b12-sandy-sb-gary"
+    ],
+    "rejects": [
+      {
+        "file": "output/rejects-round8/rej1-b04-krabs-overscale.png",
+        "reason": "C3 尺寸协调: 蟹老板贴入比 1.18x（>1.0x，单元裁后仅 918px 高被放大贴入，诱发发软）"
+      },
+      {
+        "file": "output/rejects-round8/rej2-b08-krabs-overscale.png",
+        "reason": "C3 尺寸协调: 蟹老板贴入比 1.14x 同上"
+      },
+      {
+        "file": "output/rejects-round8/rej3-b07-sandy-dome-gap.png",
+        "reason": "C4 畸变风险: 珊迪头盔玻璃圈右上缺弧（种子出图缺陷），未补全时读作残圈"
+      }
+    ],
+    "scale_report_max": {
+      "海绵宝宝": "0.94x",
+      "派大星": "0.82x",
+      "章鱼哥": "0.99x",
+      "珊迪": "0.85x",
+      "蟹老板": "0.98x",
+      "小蜗": "0.30x"
+    },
+    "audit_note": "逐张全幅+关键区域 100% 裁切复核（手指/鞋/描边/短裤/眼柄/手套），海绵宝宝双臂双手四指双腿恰好两鞋逐张通过"
+  },
+  "combos_covered": [
+    "SB+派大星",
+    "SB+章鱼哥+派大星",
+    "SB+珊迪",
+    "SB+蟹老板",
+    "SB+小蜗",
+    "SB+章鱼哥",
+    "SB+珊迪+派大星",
+    "SB+蟹老板+派大星",
+    "SB+派大星+小蜗",
+    "珊迪+章鱼哥",
+    "派大星+蟹老板",
+    "SB+珊迪+小蜗"
+  ]
+}
