@@ -1,0 +1,60 @@
+{
+  "generation": 6,
+  "date": "2026-11-05",
+  "issue": "#13",
+  "brief": "延续五代官方图案背景线；专修两处细节：派大星外轮廓描边偏红回正为均匀深色描边、海绵宝宝泡泡棒（话筒状怪道具）改为手势吹泡泡（issue 允许的路线），其余保持不变",
+  "hard_constraints": {
+    "route": "official patterned background only",
+    "max_characters": 3,
+    "loRA_only": true,
+    "composition": "互动叙事，非一字并列",
+    "unchanged": "派大星/章鱼哥形象沿用五代交付原图；绿底花朵图案背景不变；只修描边与道具两处"
+  },
+  "trio": {
+    "scene": "追泡泡（沿用五代构图微调）：海绵宝宝左前大笑、抬手指向派大星，泡泡带掠过章鱼哥头顶（落在他鼻子和头上，叉腰嫌弃），右侧派大星（五代交付同一种子原图）惊讶后仰、抬臂躲闪——视线链海绵宝宝→泡泡→派大星",
+    "spongebob": {"lora": "sbp-r7.safetensors", "trigger": "spongebob squarepants", "seed": 20261462,
+      "note": "无道具手势姿势（pursed cheeks 提示词不出嘟嘴吹泡、泡泡棒提示词必带海绵/冰棒状头——sbp-r7 属性泄漏，5 种提示词 x 多 seed 验证后取 issue 允许的手势路线：空手大笑+指向）"},
+    "patrick": {"lora": "Patrick_il.safetensors", "trigger": "p4tr1ckst4r", "seed": 20261323,
+      "note": "与五代交付图 IoU 0.974 的同一形象原图直接复用；红描边由后处理回正；右缝蓝色彩条由新固化的 blue 通道回填清除"},
+    "squidward": {"lora": "squidward-v3.safetensors", "trigger": "squidward tentacles", "seed": 20261333,
+      "note": "完全沿用五代交付抠图，无改动"}
+  },
+  "patrick_outline_fix": {
+    "strategy": "后处理回正（compose-round6.py fix_patrick_outline）：外轮廓深度 10px 带内，强红像素（R-G>60 且 G<140 加权平滑）向近黑 (20,18,16) 混合；官方红口腔、身上红斑点、内侧线条均在带外不受影响。提示词加黑描边强调在多 seed 上均无效（Patrick_il 数据伪影为系统性），故走后处理",
+    "result": "fixed",
+    "verification": "1440x3200 全分辨率目检头顶/右脸/抬臂轮廓：均匀近黑，与另两角色一致；红点/口腔保留",
+    "pixels_recolored": 25771
+  },
+  "sb_prop_fix": {
+    "strategy": "按 issue 允许的第二路线：去掉泡泡棒道具，改为空手大笑+抬手指向（sbp-r7 提示词实验：wand 必生成海绵/冰棒状头、pursed cheeks 不产出嘟嘴；无道具姿势干净稳定）",
+    "result": "fixed",
+    "verification": "全分辨率目检海绵宝宝全身：无怪道具、无残影，指向手势自然并与派大星形成视线互动"
+  },
+  "pipeline": {
+    "characters": "illustriousXL_v01 + CLIPSetLastLayer(-2) + 对应 LoRA，832x1216，30步 dpmpp_2m karras cfg7，白底提示词；gen-round6.py 驱动 ComfyUI API，RMBG-2.0 抠图",
+    "background": "bg-flat.py（沿用四/五代）：深绿 (64,99,43) + 花朵轮廓图案 + 沙地，1440x3200",
+    "compose": "compose-round6.py：派大星后处理链（blue 彩条/花形回填 → 孤岛回填 → fix_patrick_outline）；先蓝后斑顺序（blotches 级联会吞蓝岛致 blue 空转）；蓝岛判定用 10px 绿色邻域（花形/接缝彩条被自身描边隔离，直接接触测试会漏）；回填用 2500 轮调和扩散（平色补丁会留鬼影）；派大星/海绵宝宝布局按新形象比例微调；z 序改为章鱼哥→海绵宝宝→派大星（指向手指从派大星身后指出，避免手部打架）；泡泡与沙地参数沿用五代 v3"
+  },
+  "scoring": {
+    "scale": "0-25 x A风格贴合官方 / B三角色互动自然不重复 / C竖版构图 / D无畸变无文字且描边干净道具合理",
+    "route_A_official": [
+      {"cand": "A6-official-v1", "A": 24, "B": 20, "C": 22, "D": 23, "total": 89, "note": "无倾角版，集群松散，中部三手相遇略打架"},
+      {"cand": "A6-official-v2", "A": 24, "B": 22, "C": 23, "D": 22, "total": 91, "note": "更近更挤，海绵宝宝指尖与派大星掌部叠区含糊"},
+      {"cand": "A6-official-v3", "A": 24, "B": 24, "C": 24, "D": 24, "total": 96, "selected": true, "note": "对角动势最清晰，指尖从派大星身后指出不糊手，视线链完整，泡泡带引向上半部图案区"}
+    ],
+    "closer_to_sample": "与五代交付同构（样张中部大集群+花底+厚沙层），本版在样张语言不变前提下完成两处细节回正；派大星轮廓颜色与另两角色一致后，整体更接近官方黑描边语言"
+  },
+  "style_drift": [
+    "派大星描边偏红：已修复（后处理回正，全分辨率目检干净均匀；红口腔/身上红斑为官方色保留）",
+    "海绵宝宝话筒状怪道具：已修复（无道具手势路线，issue 允许）",
+    "派大星右缝蓝色彩条（Patrick_il 背景泄漏，五代人工清理过的同类问题）：已固化进 blue 通道自动清理",
+    "海绵宝宝新形象由 430px 有效尺寸放大约 2.1x，全分辨率下略软于另两角色（轻微，缩至手机尺寸不可辨）",
+    "sbp-r7 出品持续稳定；章鱼哥沿用五代交付原图，无漂移"
+  ],
+  "next_round_focus": "派大星仍建议重训（清数据+黑描边规范化）——后处理只能治标，且红口腔与红描边在色域上部分重叠，限制了自动化强度；可试样张叙事组合（蟹老板/珊迪入画）；泡泡互动与绿底图案背景已是稳定资产。",
+  "deliverables": {
+    "delivery": "delivery/generation-6.png (1440x3200, A6-official-v3, 96)",
+    "machine_side_candidates": "review/round6/A6-official-v1..3.png",
+    "evidence": "output/evidence/g6-before/after-patrick-outline.png（同区域前后对比）、g6-before-sb-prop.png / g6-after-sb-noprop.png（道具修复）、g6-after-official.jpg（全图）"
+  }
+}
