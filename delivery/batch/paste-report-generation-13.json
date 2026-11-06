@@ -1,0 +1,99 @@
+[
+ {
+  "key": "fish_left",
+  "unit": "fish_left.png",
+  "paste_h": 1050,
+  "trim_h": 1250,
+  "ratio": 0.84,
+  "top": 1560,
+  "gy": 2610
+ },
+ {
+  "key": "fish_right",
+  "unit": "fish_right.png",
+  "paste_h": 1050,
+  "trim_h": 1100,
+  "ratio": 0.955,
+  "top": 1560,
+  "gy": 2610
+ },
+ {
+  "key": "sandy",
+  "unit": "sandy-top13_00001.png",
+  "paste_h": 1184,
+  "trim_h": 1184,
+  "ratio": 1.0,
+  "top": 682,
+  "gy": 1866
+ },
+ {
+  "key": "patrick",
+  "unit": "patrick-laugh13b_00001.png",
+  "paste_h": 1380,
+  "trim_h": 1529,
+  "ratio": 0.903,
+  "top": 1080,
+  "gy": 2460,
+  "skin_specks": 3
+ },
+ {
+  "key": "squidward",
+  "unit": "squidward-annoyed_00001.png",
+  "paste_h": 1240,
+  "trim_h": 1516,
+  "ratio": 0.818,
+  "top": 1216,
+  "gy": 2456
+ },
+ {
+  "key": "plankton",
+  "unit": "plankton.png",
+  "paste_h": 200,
+  "trim_h": 230,
+  "ratio": 0.87,
+  "top": 1690,
+  "gy": 1890
+ },
+ {
+  "key": "sb",
+  "unit": "sb-right12_00001.png",
+  "paste_h": 1006,
+  "trim_h": 1184,
+  "ratio": 0.85,
+  "top": 1943,
+  "gy": 2949
+ },
+ {
+  "key": "krabs",
+  "unit": "krabs-laugh13_00001.png",
+  "paste_h": 1020,
+  "trim_h": 1168,
+  "ratio": 0.873,
+  "top": 1700,
+  "gy": 2720
+ },
+ {
+  "key": "fish_tie",
+  "unit": "fish_tie.png",
+  "paste_h": 770,
+  "trim_h": 770,
+  "ratio": 1.0,
+  "top": 2174,
+  "gy": 2944
+ },
+ {
+  "key": "gary",
+  "unit": "gary-front_00001.png",
+  "paste_h": 390,
+  "trim_h": 1095,
+  "ratio": 0.356,
+  "top": 2700,
+  "gy": 3090
+ },
+ {
+  "key": "fish_egg",
+  "ratio": 1.0,
+  "paste_h": 152,
+  "trim_h": 152
+ }
+]
