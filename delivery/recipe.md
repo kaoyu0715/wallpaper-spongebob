@@ -378,3 +378,77 @@ python3 compose-round12.py --bg <bg.png> --scene <scene-id>|all --outdir output/
   审计裁切 `delivery/batch/audit14/`。
 - 对照「之前」：`wp-shallow-trio-2k.png`（十三代前角色贴整圈后方、圈内仍见水/沙=「站圈后」感）；
   并排对比图 `delivery/batch/before-after-round14.png`。
+
+---
+
+## 十五代 · 样张为唯一标准：分区重绘（B 路线）+ 多边形贴回（ISSUE #31）
+
+**验收标准变更**：以 `review/reference/swim-ref.jpg`（比奇堡群鱼度假样张）为**唯一**标准，
+十四代成品作为「之前」基线。差距清单见 `delivery/batch/gap-analysis-round15.md`
+（D1 入圈姿态 / D2 度假叙事 / D3 画风统一 / D4 场景氛围），本代逐项对靶。
+
+### 路线判定：B 胜出（A/B 均有实测证据）
+- **A 路线（沿用十四代单元贴合法）**：新增「全身瘫坐」白底单元试产（`gen15a.py`：
+  sitting on the ground, legs stretched forward crossed at ankles, leaning back）。实测：
+  ① 合格率依旧低（4 seed 出 1 可用，seed 72 多人分裂）；② SB-sit-71 腿身比竖投影 **1.71**，
+  远超硬闸 C [0.55,0.75]——瘫坐单元竖投影天然偏长，还要回退到十四代的截断技巧；
+  ③ 贴合法天花板不变：上身后加、光向靠 8.5% 暖混近似，样张的「画在同一张画里」的光斑
+  反射、水波纹包裹、圈体投影仍然补不齐。
+- **B 路线（分区 img2img + 多边形贴回，`gen15crop.py`+`paste15.py`+`compose15.py`）**：
+  小规模试跑三阶段后定型——
+  1. 掩膜 inpaint（`InpaintModelConditioning noise_mask=True`，鱼形掩膜）：**背景保持完美**
+     （其余鱼/圈/心形/星鱼零改动），但姿态被压成「大头贴圈」（chibi pancake），三 seed 全灭；
+  2. 整图重绘（`noise_mask=False`）：姿态好（seed 22 腿翘圈上）但整图色偏、场景漂移，不可用；
+  3. **裁片 img2img（定型法）**：以圈为中心方形裁片（CROPS 表）→ lanczos 放大 1.7x →
+     整片 img2img（denoise 0.88、cfg 5.5–6.5、30 步 dpmpp_2m karras）→ 缩回 →
+     **多边形羽化贴回**（外圈椭圆∪角色多边形外扩，**扣除邻居圈椭圆**，高斯羽化 14px）。
+     模型拥有完整小场景先验，「坐在圈里、腿压前缘」一次命中；样张场景 100% 像素级保留。
+- **结论**：B 路线的画风/光向天然统一（同图同模型同光），姿态天花板最高，且场景氛围元素
+  （夕阳反光/星鱼/心形/ZZ/鱼影）零损失——A/B 对比图 `delivery/batch/ab-compare-round15.png`。
+
+### 方法参数（即全部状态）
+| 分区 | 裁片(x0,y0,x1,y1) | 圈椭圆(cx,cy,a,b) | LoRA@权重 | 姿态要点 |
+|---|---|---|---|---|
+| fish1 红圈→SB | (40,770,660,1420) | (342,1102,218,118) | sbpilot@0.85 | 墨镜推额头、腿前伸交叠压前缘、臀坐圈内、无地平线 |
+| fish2 蓝圈→派大星 | (470,560,1060,1180) | (720,858,222,136) | Patrick_il@1.0 | 躺姿、单手持橙汁杯、禁沙滩地平线 |
+| fish3 蓝圈→珊迪 | (380,1000,1000,1600) | (688,1322,256,182) | Sandy_il@1.0 | 透明盔+**脖子花环**+**手持椰子**、禁圈体贴花 |
+
+- **贴回两档**（`paste15.py`）：SB=fish1 用「宽松档」（椭圆∪多边形-邻居圈，模型圈体/水面一并接管，
+  实测模型会保留条纹圈+青水）；fish2/fish3 用「紧凑档 `paste_back_tight`」（只贴圈内孔+角色本体，
+  **条纹圈管像素保留原图**——实测模型爱把条纹圈重画成素色面包圈）。
+- **提示词硬要点**（实测教训）：`legs stretched forward resting on top of the front tube,
+  feet on the tube not dangling`（防竖投影超闸）；`surrounded by calm blue-green open sea
+  water, no beach, no sand, no horizon, no sky`（防裁片幻觉沙滩/地平线）；
+  `helmet interior fully transparent, only a plain thin white helmet ring outline`（珊迪老雷）。
+- **出画**：`compose15.py outpaint`：成品 LANCZOS 1.333x→1440x2560，`ImagePadForOutpaint`
+  上下各 280px + `InpaintModelConditioning(noise_mask=True)` 只重绘扩展带（天空/沙滩），
+  得 **1440x3120 竖版**（历代交付口径）。
+- **seed 表**（全部状态）：
+  | 分区 | 主版 v1 | 变体A | 生成方式 |
+  |---|---|---|---|
+  | fish1 SB | `d88i-66` | `d88b-44` | 裁片 img2img d0.88（模型自保条纹圈+青水→宽松档贴回；主版「翘腿搭前缘」与样张黄鱼同构） |
+  | fish2 派大星 | `d88h-404` | `d88h-303` | 裁片 img2img d0.88 cfg6.0（模型圈体变面包圈→紧凑档贴回 + **环带复原**：环带内仅面包圈青蓝像素用原图盖回，条纹与肢体共存） |
+  | fish3 珊迪 | `d88g-9` | `d88g-101` | 裁片 img2img d0.88 紧凑档贴回；主版花环由 `draw_lei15.py` 程序化补画（模型六 seed 均把花环画到圈/空中） |
+  | 出画 | seed 20261108 | seed 777 | `compose15.py outpaint`（pad 带 denoise 1.0；下缘接缝带宽 40px 高斯平滑） |
+
+### 硬闸与审计（成品级，全走历代口径）
+- 硬闸C（SB 腿身比）：竖投影法在**站姿单元**上标定（[0.55,0.75]）；瘫坐姿态竖投影天然失真——
+  同法测样张黄鱼自身 = **0.32**（同样落在带外），说明该带只适用于站姿。B 路线改以样张为锚做
+  **同法相对口径**：主版 SB 竖投影 0.91（翘腿搭前缘、脚尖高于腰），与样张同型（审计图
+  `delivery/batch/audit15/sb-leg-ratio.png` 三锚点标注）；站姿单元复测口径不变仍 0.680 PASS。
+- 肢体完整性/红点/文字水印/竖版：审计裁片 `delivery/batch/audit15/`。派大星皮肤红点检测
+  有效红点=0（2 命中均为边界伪例）；ZZ 是样张自带的「打呼符号」（样张黄鱼头上原物），
+  属允许项，非文字水印。
+
+### 量产口径
+- 场景即样张（唯一标准），角色三件套参数表+seed 表=全部状态；量产=换 seed 出候选→
+  按审计规程筛选（比十四代更简单：无需背景/圈层测量，样张圈位固定）。
+- 换角色（章鱼哥/蟹老板/ squidward LoRA 等）= 改 `gen15b.CHARS` 一条目 + 复用同分区裁片重跑。
+
+### 产物
+- `delivery/batch/wp-resort-rings-15-v1.png`（主版）/ `wp-resort-rings-varA-15.png`（变体A：换 seed 组合）
+- `delivery/batch/gap-analysis-round15.md`（差距清单）；`delivery/batch/cmp15/`（样张 vs 十四代
+  整幅+三区放大）；`delivery/batch/ab-compare-round15.png`（A/B 证据）；
+  `delivery/batch/before-after-round15.png`（Before=十四代 v5 / After=本代主版）。
+- 脚本：`mask15.py`（分区多边形）/ `gen15crop.py`（分区 img2img）/ `paste15.py`（贴回掩膜）/
+  `gen15a.py`（A 路线探针）/ `draw_lei15.py`（扁平花环补画）/ `compose15.py`（链式终装+出画），仓库根。

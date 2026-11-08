@@ -1,0 +1,37 @@
+{
+ "generation": 15,
+ "version": "varA",
+ "route": "B: region img2img + polygon paste-back",
+ "sample": "review/reference/swim-ref.jpg (local standard)",
+ "canvas_final": "1440x3120",
+ "content_canvas": "1080x1920 pixel-preserved base",
+ "characters": {
+  "sb": {
+   "seed": 44
+  },
+  "patrick": {
+   "seed": 303
+  },
+  "sandy": {
+   "seed": 101,
+   "props": [
+    "orange juice"
+   ]
+  }
+ },
+ "outpaint": {
+  "seed": 777
+ },
+ "gates": {
+  "vertical": true,
+  "text_watermark": "none (ZZ = sample snore symbol, allowed)",
+  "limbs": "complete (audit15/z1,z2)",
+  "props_vocabulary": true
+ },
+ "variantA": {
+  "sb_seed": 44,
+  "patrick_seed": 303,
+  "sandy_seed": 101,
+  "outpaint_seed": 777
+ }
+}
