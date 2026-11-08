@@ -1,0 +1,66 @@
+{
+ "generation": 15,
+ "version": "v1",
+ "route": "B: region img2img + polygon paste-back",
+ "sample": "review/reference/swim-ref.jpg (local standard)",
+ "canvas_final": "1440x3120",
+ "content_canvas": "1080x1920 pixel-preserved base",
+ "characters": {
+  "sb": {
+   "zone": "fish1",
+   "method": "crop-img2img d0.88 feet-high wording",
+   "lora": "sbpilot@0.85",
+   "seed": 66,
+   "paste": "loose polygon (ring ellipse ∪ fish poly − neighbor rings, feather 14)",
+   "props": [
+    "sunglasses pushed up",
+    "ZZ (sample-preserved)"
+   ],
+   "leg_ratio_vertical": 0.91,
+   "leg_gate": "竖投影带为站姿标定；样张黄鱼同法=0.32，主版脚搭前缘同型同档(见 audit15/sb-leg-ratio.png)",
+   "tag": "d88i"
+  },
+  "patrick": {
+   "zone": "fish2",
+   "method": "crop-img2img d0.88 cfg6.0",
+   "lora": "Patrick_il@1.0",
+   "seed": 404,
+   "paste": "tight (hole+char poly) + ring-annulus restore (blob-colored px ← original stripes)",
+   "props": [
+    "orange juice glass"
+   ],
+   "specks_after": 2
+  },
+  "sandy": {
+   "zone": "fish3",
+   "method": "crop-img2img d0.88 cfg6.0 lei-first",
+   "lora": "Sandy_il@1.0",
+   "seed": 9,
+   "paste": "tight (hole+char poly)",
+   "props": [
+    "flower lei (draw_lei15)",
+    "coconut drink"
+   ],
+   "helmet": "transparent, single thin ring outline"
+  }
+ },
+ "outpaint": {
+  "pad": "280/280",
+  "node": "ImagePadForOutpaint+InpaintModelConditioning(noise_mask)",
+  "seed": 20261108,
+  "seam_smooth": "gauss band @y2840"
+ },
+ "gates": {
+  "vertical": true,
+  "text_watermark": "none (ZZ = sample snore symbol, allowed)",
+  "limbs": "complete (audit15/z1,z2)",
+  "props_vocabulary": true,
+  "sample_leg_reference": 0.319
+ },
+ "variantA": {
+  "sb_seed": 44,
+  "patrick_seed": 303,
+  "sandy_seed": 101,
+  "outpaint_seed": 777
+ }
+}
