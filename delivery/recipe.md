@@ -452,3 +452,39 @@ python3 compose-round12.py --bg <bg.png> --scene <scene-id>|all --outdir output/
   `delivery/batch/before-after-round15.png`（Before=十四代 v5 / After=本代主版）。
 - 脚本：`mask15.py`（分区多边形）/ `gen15crop.py`（分区 img2img）/ `paste15.py`（贴回掩膜）/
   `gen15a.py`（A 路线探针）/ `draw_lei15.py`（扁平花环补画）/ `compose15.py`（链式终装+出画），仓库根。
+
+---
+
+## 十六代（issue #33：对十五代成品的三点返工）
+
+样张=唯一验收标准；布局与 B 路线（分区裁片 img2img→贴回样张）不变，重做贴回/内孔架构。
+
+### 架构（v2 贴回，`mask16.py`/`inp16.py`/`gate16.py`/`compose16.py`）
+- **贴回掩膜** = OPEN 椭圆（旧鱼足迹实测椭圆，+6 生长）∪ 旧鱼多边形外扩 18 ∪ EXTRA_ELL（鳍条/头巾残条）
+  ∪ **角色 chroma 轮廓**（裁片上按角色配色提取，MaxFilter(29/51) 核膨胀，`_chroma` 含 fish3 白圈沿门控），
+  掩膜 `point(v>140)` 硬化后 Gaussian 羽化 4；掩膜外=样张像素级保留（细节 complaints 根修）。
+- **内孔 inpaint**（`inp16.hole_mask`）= 同足迹 − 角色轮廓 dil14 → 海水 denoise1.0/noise_mask；
+  提示词要点 `plain teal blue sea water, subtle darker curved current lines, no horizon, no sky`，
+  NEG 必含 `fish/flat solid color/star/clouds/white streak`（否则模型画黄星/白云/平色块——实测三 seed 教训）。
+- **特例**：fish1 `zz_keep` 按样张 ZZ 字母 chroma 保字母不被覆盖；fish3 `hole=False`
+  （透明头盔内=样张像素=真透明，杜绝鬼脸/白纱——开口 inpaint 在 fish3 上必然翻车，实测）。
+- **过闸流程（issue 硬性）**：每区 `gate16.py` 贴回预览+样张同区 2.4x 并排 → 形体/细节/边界三查，
+  不过闸只重做该区；全区过闸才 `compose16.py chain` 终装 → outpaint 1440x3120 → 整图比对。
+
+### seed 表（终版）
+| 分区 | 生成链 | 说明 |
+|---|---|---|
+| fish1 SB | `d88i-66` → `h7sb-9403` → z1 返工 `z2/ts2..ts8` → **三轮终版 A 路线** `u2-fish1-6611` + `unit_paste` | 三轮复核根因：`zz_keep` 黄斑含样张鱼身，历届贴回把旧鱼躯干像素保留（鱼穿裤子的真因）；终版=原位全足迹 d1.0 单元生成（掩膜内无鱼像素）+ 足迹贴回 + 样张圈前缘重贴 + 仅字母 keep（`zz_letters`）|
+| fish2 派大星 | `7001`(w1 精修) → `h6-9006` → `ff-9011`(鳍条) → `fs/fs2`(残清) → `st-9014`(吸管) → `st2-9015` | 仰躺搭圈拿橙汁+吸管；死蓝底→波纹海水 |
+| fish3 珊迪 | `d88g-9`→`w1n-8001`→`w3-9101` → `f1-9501`(去花) → `g1/g2/g3-970x`(头巾/黑带残清) | 细白圈透明头盔标准脸；花环移除（宁可无，不可错位） |
+| 出画 | seed 20261108；接缝双侧 smooth_seam(half=40,radius=8) | 20261109 底带平灰，弃用 |
+
+### 已知偏离
+珊迪无椰子/花环；头盔右上与杯左浅淡水色带（远看如浪花高光）；SB 腰带小块灰蓝投影；
+底出画带为模型湿沙反光。详见 `delivery/batch/gap-analysis-round16.md`。
+
+### 产物
+- `delivery/batch/wp-resort-rings-16-v1.png`（1440x3120 主版）
+- `delivery/batch/before-after-round16.png`（Before=十五代 v1 / After=十六代）
+- `delivery/batch/audit16/`（分区样张并排过闸图×3、贴回预览×3、整图比对）
+- 脚本：`mask16.py`/`inp16.py`/`gate16.py`/`sbs16.py`/`compose16.py`/`gen16crop.py`（仓库根）
