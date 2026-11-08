@@ -1,0 +1,47 @@
+{
+  "generation": 14,
+  "version": "v5",
+  "occlusion": "ring-layer-sandwich",
+  "scene": {
+    "yellow": {
+      "unit": "sb_r",
+      "paste_h": 557,
+      "unit_crop_h": 1192,
+      "paste_ratio": 0.68,
+      "tilt": 2,
+      "bottom_y": 1655,
+      "cx_canvas": 491,
+      "sb_leg_ratio": 0.6827195467422096,
+      "canvas": [
+        1024,
+        1485
+      ]
+    },
+    "blue": {
+      "unit": "pat_l",
+      "paste_h": 507,
+      "unit_crop_h": 1208,
+      "paste_ratio": 0.6,
+      "tilt": -3,
+      "bottom_y": 1430,
+      "cx_canvas": 926,
+      "canvas": [
+        832,
+        1216
+      ]
+    },
+    "pink": {
+      "unit": "new_sandy_l",
+      "paste_h": 635,
+      "unit_crop_h": 1283,
+      "paste_ratio": 0.56,
+      "tilt": 2,
+      "bottom_y": 2119,
+      "cx_canvas": 943,
+      "canvas": [
+        1024,
+        1536
+      ]
+    }
+  }
+}
