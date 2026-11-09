@@ -137,6 +137,74 @@ def _inpaint_pass(fish, seed, tag, base_bin, stage, crop_box, upscale):
     return out
 
 
+def tube_fill(fish, sel, stage):
+    """管体重建=确定性极坐标填色（模型 inpaint 实测总画坏圈条带几何，弃用）：
+    以样张自身可见管面按（绕环角 φ × 截面深度 v）分箱取中位色，
+    条纹沿角向天然延续、光照逐角正确；仅写入 sel∧管带 像素。"""
+    import mask17 as _m
+    cx, cy, a, b = _m.OUTER_ELL[fish]
+    hx, hy, ha, hb = _m.HOLE_ELL[fish]
+    tube = np.asarray(_m.tube_band(fish)) > 0
+    zz = np.asarray(_m.zz_letters()) > 0 if fish == 'fish1' else np.zeros_like(tube)
+    H, W = tube.shape
+    ys, xs = np.mgrid[0:H, 0:W]
+    dx, dy = xs - cx, ys - cy
+    d = np.sqrt(dx * dx + dy * dy)
+    phi = np.arctan2(dy, dx) % (2 * np.pi)
+    cos_f, sin_f = np.cos(phi), np.sin(phi)
+    rh = 1.0 / np.sqrt((cos_f / ha) ** 2 + (sin_f / hb) ** 2)
+    ro = 1.0 / np.sqrt((cos_f / a) ** 2 + (sin_f / b) ** 2)
+    # 射线自外圈心出发，孔椭圆心略偏——用交点近似的差即够分箱
+    v = (d - rh) / np.maximum(ro - rh, 1e-3)
+    NB, NV = 240, 10
+    ub = np.clip((phi / (2 * np.pi) * NB).astype(int), 0, NB - 1)
+    vb = np.clip((v * NV).astype(int), 0, NV - 1)
+    vis = tube & ~sel & ~zz
+    arr = np.asarray(stage).astype(np.float64)
+    cells = np.full((NB, NV, 3), np.nan)
+    idx = ub[vis] * NV + vb[vis]
+    pix = arr[vis]
+    order = np.argsort(idx)
+    idx_s, pix_s = idx[order], pix[order]
+    bnd = np.flatnonzero(np.diff(idx_s)) + 1
+    for lo, hi in zip(np.r_[0, bnd], np.r_[bnd, len(idx_s)]):
+        g = pix_s[lo:hi]
+        cells[idx_s[lo] // NV, idx_s[lo] % NV] = np.median(g, axis=0)
+    for r in (1, 2, 4):  # 空箱：角向(环形)邻域均值 → 再径向
+        empty = np.isnan(cells[:, :, 0])
+        if not empty.any():
+            break
+        src_ok = np.where(empty, 0.0, cells)
+        acc = np.zeros_like(cells)
+        cnt = np.zeros((NB, NV))
+        for k in range(-r, r + 1):
+            acc += np.roll(src_ok, k, axis=0)
+            cnt += np.roll(np.where(empty, 0.0, 1.0), k, axis=0)
+        cnt2 = np.maximum(cnt, 1e-6)
+        fillc = acc / cnt2[:, :, None]
+        cells = np.where(empty[:, :, None] & (cnt[:, :, None] > 0), fillc, cells)
+    for r in (1, 2, 4):  # 仍空：同角列径向邻域
+        empty = np.isnan(cells[:, :, 0])
+        if not empty.any():
+            break
+        for j in range(NV):
+            lo = max(0, j - r)
+            hi = min(NV, j + r + 1)
+            blk = cells[:, lo:hi, :]
+            mean = np.nanmean(blk, axis=1)
+            col_empty = empty[:, j]
+            cells[col_empty, j] = mean[col_empty]
+    fillimg = cells[ub, vb]
+    tgt = sel & tube
+    out = np.asarray(stage).copy()
+    out[tgt] = np.clip(fillimg[tgt], 0, 255).astype('uint8')
+    im = Image.fromarray(out)
+    mh = Image.fromarray((sel * 255).astype('uint8')).filter(ImageFilter.GaussianBlur(2))
+    outb = stage.convert('RGB').copy()
+    outb.paste(im, (0, 0), mh)
+    return outb
+
+
 def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_only=False):
     """① 两段 erase-inpaint（均 d1.0，无预填充——预填充实测要么留鱼鬼影要么死色平涂）：
        先海水段（足迹¬管带），后管体段（足迹∧管带，圈条带自然延续）。"""
@@ -150,8 +218,8 @@ def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_
     base = fp & (~fb | limbs)
     if fish == 'fish1':
         base = base & ~(np.asarray(_m.zz_letters()) > 0)
-    for tag, sel in (('water', base & ~tube), ('tube', base & tube)):
-        stage = _inpaint_pass(fish, seed, tag, sel, stage, box, upscale)
+    stage = _inpaint_pass(fish, seed, 'water', base & ~tube, stage, box, upscale)
+    stage = tube_fill(fish, base & tube, stage)
     dst = stage_out or 'output/stage17-%s-inp.png' % fish
     stage.save(dst)
     print('stage ->', dst)
