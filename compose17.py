@@ -12,7 +12,10 @@
 #   python3 compose17.py region  --fish fish1 [--stage-in <png>] [--out <png>]   # ②③④
 #   python3 compose17.py chain   --i1 a.png --i2 b.png --i3 c.png --out stage.png
 #   python3 compose17.py outpaint --in stage.png --out <png> [--seed 20261108] [--seam 40]
-import argparse, os, sys
+import argparse, os, sys, time
+_T0 = time.time()
+def _p(msg):
+    if os.environ.get('DEBUG17'): print('%.1fs' % (time.time()-_T0), msg, flush=True)
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageChops
 
@@ -194,6 +197,70 @@ def water_copy_fill(fish, sel, stage, donor_path, offset):
     return ob
 
 
+def tube_mirror_patch(fish, sel_t, stage):
+    """鱼鳍压管区精修：以同圈同高度的镜像侧管面克隆（泳圈左右条纹同构、
+    光照相近），极坐标分箱只兜镜像源不可用的像素。源须干净（管带 ∧ ¬补画域 ∧ ¬ZZ）。"""
+    import mask17 as _m
+    cx = _m.OUTER_ELL[fish][0]
+    tube = np.asarray(_m.tube_band(fish)) > 0
+    zz = np.asarray(_m.zz_letters()) > 0 if fish == 'fish1' else np.zeros_like(tube)
+    base = inpaint_base(fish)
+    stg = np.asarray(stage.convert('RGB')).astype(np.float64)
+    x = np.arange(stg.shape[1])
+    mir = stg[:, 2 * int(round(cx)) - x, :]      # 水平镜像
+    # 镜像源干净判据：REF 该处是管面且非鱼/鳍暖色（红条 G<90、紫暗部 R<150 不误伤）
+    ref = np.asarray(Image.open(REF).convert('RGB')).astype(int)
+    finref = (ref[:, :, 0] > 150) & (ref[:, :, 1] > 100) & (ref[:, :, 0] - ref[:, :, 2] > 50)
+    xidx = 2 * int(round(cx)) - np.arange(stg.shape[1])
+    oksrc = np.clip(xidx, 0, stg.shape[1] - 1)
+    mir_ok = (tube & ~finref & ~zz)[:, oksrc]
+    # 色调增益：目标带周边本侧干净管面 vs 镜像侧
+    near = np.asarray(Image.fromarray((sel_t * 255).astype('uint8'))
+                      .filter(ImageFilter.MaxFilter(41))) > 0
+    near = near & tube & ~base & ~zz
+    clean_m = mir_ok & np.roll(near[:, ::-1], 1, axis=1)
+    g = np.ones(3)
+    if near.sum() > 400 and clean_m.sum() > 400:
+        g = np.clip(np.median(stg[near], axis=0) / np.maximum(np.median(mir[near], axis=0), 1.0),
+                    0.8, 1.25)
+    out = stg.copy()
+    tgt = sel_t & mir_ok
+    out[tgt] = np.clip(mir[tgt] * g, 0, 255)
+    im = Image.fromarray(out.astype('uint8'))
+    mh = Image.fromarray((tgt * 255).astype('uint8')).filter(ImageFilter.GaussianBlur(1.6))
+    ob = stage.convert('RGB').copy()
+    ob.paste(im, (0, 0), mh)
+    return ob
+
+
+def tube_row_med(fish, sel_t, stage):
+    """压管鱼鳍区：逐行中位填充——管体明暗主要沿纵向（行内恒定），
+    横向中位可保光影、延续同侧条纹色。源=同行管面 ∧ ¬补画域(膨胀9) ∧ ¬ZZ ∧ ¬鱼色。"""
+    import mask17 as _m
+    tube = np.asarray(_m.tube_band(fish)) > 0
+    zz = np.asarray(_m.zz_letters()) > 0 if fish == 'fish1' else np.zeros_like(tube)
+    ref = np.asarray(Image.open(REF).convert('RGB')).astype(np.float64)
+    finref = (ref[:, :, 0] > 150) & (ref[:, :, 1] > 100) & (ref[:, :, 0] - ref[:, :, 2] > 50)
+    wide = np.asarray(Image.fromarray((sel_t * 255).astype('uint8'))
+                      .filter(ImageFilter.MaxFilter(19))) > 0
+    ok = tube & ~finref & ~zz & ~wide
+    stg = np.asarray(stage.convert('RGB')).astype(np.float64)
+    out = stg.copy()      # 行源不足的行保持管分箱结果，绝不回退 REF（会贴回鱼鳍）
+    rows = np.flatnonzero(sel_t.any(1))
+    cnt = ok.sum(1)
+    for yy in rows:
+        cols = np.flatnonzero(ok[yy])
+        if cnt[yy] >= 40:
+            med = np.median(ref[yy, cols], axis=0)
+            m = sel_t[yy]
+            out[yy, m] = med
+    im = Image.fromarray(np.clip(out, 0, 255).astype('uint8'))
+    mh = Image.fromarray((sel_t * 255).astype('uint8')).filter(ImageFilter.GaussianBlur(1.5))
+    ob = stage.convert('RGB').copy()
+    ob.paste(im, (0, 0), mh)
+    return ob
+
+
 def inpaint_base(fish):
     """补画基础域：足迹(¬前缘|压管肢体) ∪ 抠图α∧¬前缘（鱼鳍越出足迹，实测教训）∧¬ZZ。"""
     import mask17 as _m
@@ -241,11 +308,13 @@ def tube_fill(fish, sel, stage):
     # 肢体∧管=全部管；足迹 margin0 也吞圈），改由统计法剔除鱼染箱（下方离群判定）。
     vis = tube & ~zz
     if fish == 'fish1':
-        # 黄/橙鱼鳍染色像素不进分箱源（红条带 G<90、白面 B>150，不误伤）——
-        # 仅用于 bin 清洗，非圈保护掩膜（issue① 禁的是 chroma 保圈掩膜如 G16 zz_keep）。
+        # 只允许条纹色进分箱源（红/白族）——鳍黄、橙、紫暗、绿 AA 一律排除；
+        # 仅用于 bin 清洗，非圈保护掩膜（issue① 禁的是 chroma 保圈掩膜）。
         arr0 = np.asarray(stage).astype(int)
-        fin = (arr0[:, :, 0] > 160) & (arr0[:, :, 1] > 130) & (arr0[:, :, 2] < 120)
-        vis = vis & ~fin
+        Rr, Gg, Bb = arr0[:, :, 0], arr0[:, :, 1], arr0[:, :, 2]
+        red = (Rr > 140) & (Rr - Gg > 80) & (Bb < 100)
+        white = (Rr > 190) & (Gg > 170) & (Bb > 170)
+        vis = vis & (red | white)
     arr = np.asarray(stage).astype(np.float64)
     cells = np.full((NB, NV, 3), np.nan)
     idx = ub[vis] * NV + vb[vis]
@@ -369,7 +438,33 @@ def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_
                 rr = ringpx[box[1]:box[3], box[0]:box[2]]
                 tm = np.median(stg[box[1]:box[3], box[0]:box[2]][rr], axis=0)
                 dmm = np.median(dsub[rr], axis=0)
-                g = np.clip(tm / np.maximum(dmm, 1.0), 0.85, 1.18)
+                g = np.clip(tm / np.maximum(dmm, 1.0), 0.62, 1.42)
+                # 供体水去饱和(灰平)——按邻域水色对比度补饱和（实测教训）。
+                tsub = stg[box[1]:box[3], box[0]:box[2]][rr]
+                s1 = float(np.std(dsub[rr], axis=1).mean())
+                s2 = float(np.std(tsub, axis=1).mean())
+                k = float(np.clip(s2 / max(s1, 1e-3), 1.0, 1.8))
+                mu = dsub.mean(axis=2, keepdims=True)
+                dsub = mu + k * (dsub - mu)
+                print('water gain', np.round(g, 3), 'sat', round(k, 2), flush=True)
+            # 孔内局部校正：供体孔内水灰绿漂移，以孔缘 REF 水残月为局部目标（实测教训）。
+            holef = np.zeros(REF_SIZE[::-1], bool)
+            hx, hy, ha, hb = mask17.HOLE_ELL[fish]
+            yy0, xx0 = np.mgrid[0:REF_SIZE[1], 0:REF_SIZE[0]]
+            holef = ((xx0 - hx) / ha) ** 2 + ((yy0 - hy) / hb) ** 2 <= 1.0
+            cre = holef & ~selw & ~np.asarray(_m.zz_letters()) & ~warm
+            creb = cre[box[1]:box[3], box[0]:box[2]]
+            tcre = stg[box[1]:box[3], box[0]:box[2]][creb]
+            if creb.sum() > 200:
+                g2 = np.clip(np.median(tcre, axis=0) / np.maximum(np.median(dsub[creb], axis=0), 1.0), 0.75, 1.35)
+                s1 = float(np.std(dsub[creb], axis=1).mean())
+                s2 = float(np.std(tcre, axis=1).mean())
+                k2 = float(np.clip(s2 / max(s1, 1e-3), 1.0, 1.8))
+                hb2 = holef[box[1]:box[3], box[0]:box[2]]
+                mu2 = dsub[hb2].mean(axis=1, keepdims=True)
+                seg = mu2 + k2 * (dsub[hb2] - mu2)
+                dsub[hb2] = np.clip(seg * g2, 0, 255)
+                print('hole gain', np.round(g2, 3), 'sat', round(k2, 2), 'cres', int(creb.sum()), flush=True)
             don = Image.fromarray(np.clip(dsub * g, 0, 255).astype('uint8'))
         ob = stage.convert('RGB').copy()
         ob.paste(don, (box[0], box[1]), pm)
@@ -377,7 +472,59 @@ def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_
     else:
         donor = stage_out_donors.get(fish, DONOR_WATER)
         stage = water_copy_fill(fish, base & ~tube, stage, donor, WATER_OFFSET[fish])
+    _p('water pasted')
+    # 水面暖色残留清洗（皮肤/鱼鳍碎屑硬门槛）：sel∧¬管 区域中暖色像素
+    # 用周围水色替换——对三鱼通用。
+    stg = np.asarray(stage.convert('RGB')).astype(np.float64)
+    selw2 = base & ~tube
+    wmask = (stg[:, :, 0] > 150) & (stg[:, :, 1] > 60) & \
+        (stg[:, :, 0] - stg[:, :, 2] > 40) & selw2
+    if wmask.any():
+        wa2 = ((~selw2 | tube) * 255).astype(np.uint8)
+        wa2 = 255.0 - np.asarray(Image.fromarray(wa2).filter(ImageFilter.MaxFilter(3))).astype(np.float32)
+        wmt2 = Image.fromarray(wa2.astype('uint8'))
+        fill2 = stg.copy()
+        for r in (15, 40, 100):
+            den = np.asarray(wmt2.filter(ImageFilter.GaussianBlur(r))).astype(np.float32)
+            okk = den > 30.0
+            den = np.maximum(den, 1.0)
+            for i in range(3):
+                num = np.asarray(Image.fromarray(np.clip(stg[:, :, i] * wa2 / 255.0, 0, 255).astype('uint8'))
+                                 .filter(ImageFilter.GaussianBlur(r))).astype(np.float32)
+                vv = np.clip(num * 255.0 / den, 0, 255)
+                fill2[:, :, i] = np.where(okk, vv, fill2[:, :, i])
+        stg[wmask] = fill2[wmask]
+        stage = Image.fromarray(np.clip(stg, 0, 255).astype('uint8'))
+    _p('warm cleaned')
+    # 区域水分治：孔内水=供体+孔缘色调；圈外水=REF 平移克隆（圈下涟漪水自相似，
+    # 供体模型水灰平——实测教训）。多偏移择首个合法源，兜底=既有卷积填充。
+    hole = np.asarray(_m.hole_mask(fish)) > 0
+    stg2 = np.asarray(stage.convert('RGB')).astype(np.float64)
+    refc = np.asarray(Image.open(REF).convert('RGB')).astype(np.float64)
+    Rr2, Gg2, Bb2 = refc[:, :, 0], refc[:, :, 1], refc[:, :, 2]
+    zz = np.asarray(_m.zz_letters()) > 0 if fish == 'fish1' else np.zeros_like(tube)
+    finref = (refc[:, :, 0] > 150) & (refc[:, :, 1] > 100) & (refc[:, :, 0] - refc[:, :, 2] > 50)
+    srcok = ~tube & ~base & ~zz & ~finref
+    mx = stg2.max(-1); mn = stg2.min(-1)
+    grayflat = (mx - mn < 26) & (stg2.mean(-1) > 90) & (stg2.mean(-1) < 195)
+    # 孔内水=供体（REF 平移克隆实测：浅=平淡、深=暗影池，皆不贴样张光照；供体灰平但可接受）。
+    outer_water = (base & ~tube & ~hole & grayflat if fish != 'fish1'
+                   else rem & ~hole & ~tube)
+    for (dx, dy) in ((0, 34), (-34, 20), (34, 20), (-48, -14), (48, -14), (0, -34), (68, 0), (-68, 0),
+                     (0, 132), (-34, 140), (34, 140), (0, 176)):
+        if not outer_water.any():
+            break
+        sy = np.clip(np.arange(stg2.shape[0]) + dy, 0, stg2.shape[0] - 1)
+        sx = np.clip(np.arange(stg2.shape[1]) + dx, 0, stg2.shape[1] - 1)
+        cand = srcok[np.ix_(sy, sx)]
+        use = outer_water & cand
+        stg2[use] = refc[np.ix_(sy, sx)][use]
+        outer_water = outer_water & ~use
+    stage = Image.fromarray(np.clip(stg2, 0, 255).astype('uint8'))
+    _p('gray clone done')
     stage = tube_fill(fish, base & tube, stage)
+    _p('tube filled')
+    stage = tube_row_med(fish, base & tube, stage)
     dst = stage_out or 'output/stage17-%s-inp.png' % fish
     stage.save(dst)
     print('stage ->', dst)
