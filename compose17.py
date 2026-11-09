@@ -83,6 +83,7 @@ def _inpaint_pass(fish, seed, tag, base_bin, stage, crop_box, upscale):
     big = stage.crop((x0, y0, x1, y1)).resize((W, H), Image.LANCZOS)
     # d0.95 + 无鱼归一化卷积底色（掩膜外颜色多尺度扩散进掩膜）：
     # 平涂死色（0.8 实测）与 hallucination（1.0 实测）之间的折中。
+    DEN = 1.0   # 1.0+强负面（person/donut/ring 全禁）实测优于 0.95（大区域死色）
     barr = np.asarray(big).astype(np.float32)
     wsm = np.asarray(m).astype(np.float32)            # 掩膜内=1 → 权重=0
     wmt = Image.fromarray((255.0 - wsm).astype('uint8'))
@@ -98,8 +99,9 @@ def _inpaint_pass(fish, seed, tag, base_bin, stage, crop_box, upscale):
                              .filter(ImageFilter.GaussianBlur(rr))).astype(np.float32)
             v = np.clip(num * 255.0 / den, 0, 255)
             fill[:, :, i] = np.where(ok, v, fill[:, :, i])
-    mhard = m.point(lambda v: 255 if v > 127 else 0)
-    big = Image.composite(Image.fromarray(fill.astype('uint8')), big, mhard)
+    if DEN < 0.98:
+        mhard = m.point(lambda v: 255 if v > 127 else 0)
+        big = Image.composite(Image.fromarray(fill.astype('uint8')), big, mhard)
     big.save(os.path.join(d, name + '.png'))
     m.save(os.path.join(d, name + '-mask.png'))
     key = 'tube' if tag == 'tube' else 'w'
@@ -118,7 +120,7 @@ def _inpaint_pass(fish, seed, tag, base_bin, stage, crop_box, upscale):
               'vae': ['1', 2], 'pixels': ['6', 0], 'mask': ['7b', 0], 'noise_mask': True}},
       '10': {'class_type': 'KSampler', 'inputs': {'model': ['1', 0], 'positive': ['8', 0], 'negative': ['8', 1],
                'latent_image': ['8', 2], 'seed': int(seed), 'steps': 30, 'cfg': 5.5,
-               'sampler_name': 'dpmpp_2m', 'karras': True, 'denoise': 0.95,
+               'sampler_name': 'dpmpp_2m', 'karras': True, 'denoise': DEN,
                'scheduler': 'karras'}},
       '11': {'class_type': 'VAEDecode', 'inputs': {'samples': ['10', 0], 'vae': ['1', 2]}},
       '12': {'class_type': 'SaveImage', 'inputs': {'images': ['11', 0], 'filename_prefix': 'g17hole/' + name}},
@@ -148,18 +150,26 @@ def tube_fill(fish, sel, stage):
     zz = np.asarray(_m.zz_letters()) > 0 if fish == 'fish1' else np.zeros_like(tube)
     H, W = tube.shape
     ys, xs = np.mgrid[0:H, 0:W]
-    dx, dy = xs - cx, ys - cy
-    d = np.sqrt(dx * dx + dy * dy)
-    phi = np.arctan2(dy, dx) % (2 * np.pi)
-    cos_f, sin_f = np.cos(phi), np.sin(phi)
-    rh = 1.0 / np.sqrt((cos_f / ha) ** 2 + (sin_f / hb) ** 2)
-    ro = 1.0 / np.sqrt((cos_f / a) ** 2 + (sin_f / b) ** 2)
-    # 射线自外圈心出发，孔椭圆心略偏——用交点近似的差即够分箱
-    v = (d - rh) / np.maximum(ro - rh, 1e-3)
+    # 归一化空间：外圈→单位圆；沿φ射线求孔椭圆交点 ρ_h，v=截面参数(0孔缘→1外缘)
+    X, Y = (xs - cx) / a, (ys - cy) / b
+    rho = np.sqrt(X * X + Y * Y)
+    phi = np.arctan2(Y, X) % (2 * np.pi)
+    cf, sf = np.cos(phi), np.sin(phi)
+    oxx, oyy = (cx - hx) / ha, (cy - hy) / hb
+    A = (a * cf / ha) ** 2 + (b * sf / hb) ** 2
+    B = 2 * (oxx * a * cf / ha + oyy * b * sf / hb)
+    C = oxx * oxx + oyy * oyy - 1.0
+    disc = np.maximum(B * B - 4 * A * C, 0.0)
+    rho_h = (-B + np.sqrt(disc)) / (2 * A)      # 外心在孔内，取正根=前向交点
+    v = (rho - rho_h) / np.maximum(1.0 - rho_h, 1e-3)
     NB, NV = 240, 10
     ub = np.clip((phi / (2 * np.pi) * NB).astype(int), 0, NB - 1)
     vb = np.clip((v * NV).astype(int), 0, NV - 1)
-    vis = tube & ~sel & ~zz
+    # 可见管面 = 管带 ∧ ¬旧鱼本体足迹(margin0，膨胀2px去AA) ∧ ¬ZZ。
+    # 注意：ringcut 抠图 α 含圈骨架，直接当遮挡会连管面一起排除（实测仅剩 2k px）。
+    body = np.asarray(_m.footprint(fish, margin=0)) > 127
+    cad = np.asarray(Image.fromarray((body * 255).astype('uint8')).filter(ImageFilter.MaxFilter(5))) > 60
+    vis = tube & ~cad & ~zz
     arr = np.asarray(stage).astype(np.float64)
     cells = np.full((NB, NV, 3), np.nan)
     idx = ub[vis] * NV + vb[vis]
@@ -170,30 +180,31 @@ def tube_fill(fish, sel, stage):
     for lo, hi in zip(np.r_[0, bnd], np.r_[bnd, len(idx_s)]):
         g = pix_s[lo:hi]
         cells[idx_s[lo] // NV, idx_s[lo] % NV] = np.median(g, axis=0)
-    for r in (1, 2, 4):  # 空箱：角向(环形)邻域均值 → 再径向
-        empty = np.isnan(cells[:, :, 0])
-        if not empty.any():
+    # 空格填充：波前最近邻复制（φ 环形优先同 v 行，其次 v±1 列）——
+    # 加权平均会把红白条纹混成灰紫（实测），最近邻保证条纹按角向干净延续。
+    filled = ~np.isnan(cells[:, :, 0])
+    for _ in range(NB + NV):
+        if filled.all():
             break
-        src_ok = np.where(empty, 0.0, cells)
-        acc = np.zeros_like(cells)
-        cnt = np.zeros((NB, NV))
-        for k in range(-r, r + 1):
-            acc += np.roll(src_ok, k, axis=0)
-            cnt += np.roll(np.where(empty, 0.0, 1.0), k, axis=0)
-        cnt2 = np.maximum(cnt, 1e-6)
-        fillc = acc / cnt2[:, :, None]
-        cells = np.where(empty[:, :, None] & (cnt[:, :, None] > 0), fillc, cells)
-    for r in (1, 2, 4):  # 仍空：同角列径向邻域
-        empty = np.isnan(cells[:, :, 0])
-        if not empty.any():
+        cands = [np.roll(cells, (k, 0), axis=(0, 1)) for k in (1, -1)] + [
+            np.concatenate([cells[:, 1:], np.full((NB, 1, 3), np.nan)], 1),
+            np.concatenate([np.full((NB, 1, 3), np.nan), cells[:, :-1]], 1)]
+
+        newc = np.where(filled[:, :, None], cells, np.nan)
+        nf = filled.copy()
+        for cand in cands:
+            ok = np.isnan(newc[:, :, 0]) & ~np.isnan(cand[:, :, 0])
+            newc = np.where(ok[:, :, None], cand, newc)
+            nf = nf | ok
+            if nf.all():
+                break
+        if not nf.any() or (nf == filled).all() and not filled.any():
             break
-        for j in range(NV):
-            lo = max(0, j - r)
-            hi = min(NV, j + r + 1)
-            blk = cells[:, lo:hi, :]
-            mean = np.nanmean(blk, axis=1)
-            col_empty = empty[:, j]
-            cells[col_empty, j] = mean[col_empty]
+        cells, filled = newc, nf
+    if __debug__ and os.environ.get('T17DUMP'):
+        Image.fromarray(np.where(np.isnan(cells), 0, cells).astype('uint8')).resize((960, 400), Image.NEAREST).save(os.environ['T17DUMP'])
+    gmed = np.nanmedian(cells.reshape(-1, 3), axis=0)
+    cells = np.where(np.isnan(cells), gmed[None, None, :], cells)
     fillimg = cells[ub, vb]
     tgt = sel & tube
     out = np.asarray(stage).copy()
