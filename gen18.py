@@ -4,17 +4,18 @@
 #   v1 全局拼接 0.85/1.0/1.0 → 三 LoRA 融成单个混合体（seed 18001/18005/18006）；
 #   v2/v3 ConditioningSetArea 分区条件 → 底景稀释/跨框染色（18002/18003/18004_00002_）；
 #   v4 仅挂 sbpilot 整图 → 单元档 LoRA 在长场景 prompt 下漂移成动漫风（18101/18102）。
-# v5 =「无角色 LoRA 整图底 + 单 LoRA 逐角色分区二出」= issue 允许的「分区二次出再合成」，
-#   整图为底、非贴入合成：
-#   pass1 整图 txt2img 不挂角色 LoRA（十三代背景鱼实测：底模官方卡通风可靠）；
-#   pass2/3/4 逐角色区域 latent-mask d1.0 二次出，每遍仅挂该角色 LoRA，
-#   prompt 用 recipe §1.1 单元词面（LoRA 舒适分布）+ 船面/海水环境词保证边缘融合。
-#   管线口径 = recipe §1：illustriousXL、CLIP -2、30 步 dpmpp_2m karras cfg 5.5、768x1344。
-#   高清化 = Remacri x2 → 9:16 裁切 → LANCZOS 1080x1920；硬闸自查=逐角色 2.4x 裁剪。
+# v8 终局路线 =「Qwen-Image-2.1 整图直出 +（对症）单 LoRA 角色区域二次出」：
+#   Illustrious 自查记录：三 LoRA 同挂必融合（v1 单元档 / v6 降档）、分区条件染色（v2/v3）、
+#   无角色 LoRA 不识角色（v5 萌系动物）、无主体底景必崩（v7 粉肠船/空白/书法屏风）。
+#   Qwen-Image-2.1 = README 路线1（全员合影已验证），多人整图 + 质感贴 swim-ref 风格锚；
+#   角色若糊则 fix() 用该角色 LoRA 做区域 d1.0 inpaint（issue 允许的分区二次出）。
+#   Illustrious 单元口径保留 = recipe §1：CLIP -2、30 步 dpmpp_2m karras cfg 5.5。
+#   高清/交付：Qwen 原生 1088x1920 → 居中裁 1080x1920（qfinal）；硬闸自查=逐角色 2.4x 裁剪。
 # 用法:
-#   python3 gen18.py gen --seeds 18101,...             pass1 整图 → ComfyUI g18p1/
-#   python3 gen18.py fix <p1-file> --to pat            pass2（自动接 --to sandy）→ g18p3/
-#   python3 gen18.py up  <file>...                     高清化 → output/g18final/
+#   python3 gen18.py qgen --seeds 18401,...            Qwen 整图 → ComfyUI g18q/
+#   python3 gen18.py qfinal <q-file>...                居中裁 1080x1920 → output/g18final/
+#   python3 gen18.py fix <file> [--to sb|pat|sandy] [--sb-box x,y,w,h] [--pat-box ...] [--sandy-box ...]
+#   python3 gen18.py gen --seeds ... / up <file>       （留档：Illustrious 整图底 v7 已否 / Remacri 高清化）
 #   python3 gen18.py crop <final> --char sb --box x,y,w,h   2.4x 角色裁剪 → output/g18gate/
 #   python3 gen18.py sbs  <final>                      与样张并排 → output/g18gate/
 import json, os, shutil, sys, time, urllib.request
@@ -47,16 +48,15 @@ SEA = ('turquoise ocean water, clear water ripples, sparkling sun glitter reflec
 BOAT = ('a long yellow inflatable banana boat floating diagonally on the turquoise sea '
         'in the lower middle of the image, water splashes and reflection under the hull')
 
-# pass1 整图（不挂角色 LoRA）：三角色以通用属性词占位，pass2+ 逐角色保真
+# pass1 整图底：空香蕉船场景，不挂角色 LoRA、无角色词。
+# 实测终局（自查记录见 PR）：
+#   单元档同挂（v1 0.85/1/1）、分区条件（v2/v3）、降档同挂（v6 0.6/0.7/0.7）→ 一律融合成单个穿衬衫混合体；
+#   不挂角色 LoRA + 角色词（v5）→ 底模不认识海绵宝宝系角色，画成萌系动物。
+#   结论：三角色必须由各自 LoRA 单独成区（十六代 A 路线 inpaint 原语已验证）。
 POS_P1 = (STYLE + ', ' + SEA + ', ' + BOAT + ', '
-  'three cartoon characters riding on the banana boat, '
-  'yellow porous rectangular sponge man wearing white shirt red tie brown shorts red striped socks, '
-  'sitting relaxed at the left end of the banana boat, happy smile, '
-  'pink starfish wearing green shorts lying on his back on the middle of the banana boat, dopey happy smile, '
-  'squirrel in white astronaut suit with round glass helmet sitting at the right end of the banana boat, '
-  'holding a brown coconut drink with a straw in both hands, '
+  'nobody on the boat, empty banana boat, no characters, no people, '
   'a small yellow starfish floating on the water nearby, '
-  'exactly three characters, each with own separate body, no humans, no text, no watermark')
+  'clean simple composition, no text, no watermark')
 
 # pass2/3/4 区域二次出（掩码内=角色本体 ∪ 羽化带；prompt 须覆盖整掩码域；词面=recipe §1.1 单元模板）
 _UNIT = 'flat 2d cartoon, tv cartoon style, clean lineart, simple shading'
@@ -109,7 +109,10 @@ NEG = (
 def post(path, payload):
     data = json.dumps(payload).encode()
     req = urllib.request.Request(API + path, data=data, headers={'Content-Type': 'application/json'})
-    return json.loads(urllib.request.urlopen(req, timeout=30).read())
+    try:
+        return json.loads(urllib.request.urlopen(req, timeout=30).read())
+    except urllib.error.HTTPError as e:
+        raise RuntimeError('ComfyUI %s: %s' % (e.code, e.read().decode()[:800]))
 
 
 def wait(pid, timeout=1800):
@@ -157,7 +160,7 @@ def ckpt_lora(g, loras):
 
 
 def gen(seeds):
-    """pass1：整图 txt2img，不挂角色 LoRA（底模官方卡通风，三角色通用词占位）。"""
+    """pass1：整图底，空香蕉船场景，不挂角色 LoRA（见 POS_P1 终局结论）。"""
     for s in seeds:
         g = {}
         m, c = ckpt_lora(g, [])
@@ -173,9 +176,10 @@ def gen(seeds):
         print('p1', s, out_of(e, '9'), flush=True)
 
 
-def fix(src, first='sb', boxes=None):
+def fix(src, first='sb', boxes=None, size=None):
     """pass2/3/4：对 src 依次做 sb → pat → sandy 单 LoRA 区域 d1.0 二次出（latent-mask inpaint）。
-    boxes: {'sb':(x,y,w,h), 'pat':..., 'sandy':...} 按该 seed 整图实际站位给出（必填）。"""
+    boxes: {'sb':(x,y,w,h), 'pat':..., 'sandy':...} 按该 seed 实际站位给出（必填，src 像素系）。
+    size: (w,h) src 尺寸；None=按图自动。"""
     cur = src
     tag = ''.join(ch for ch in os.path.basename(src) if ch.isdigit())[:5]
     step = first
@@ -183,11 +187,12 @@ def fix(src, first='sb', boxes=None):
         f = FIXES[step]
         name = f'wp-banana-{tag}-{step}in.png'
         img_rel = to_input(cur, name)
+        W, H = size or Image.open(cur).size
         box = (boxes or {}).get(step) or f['box']
         if not box:
             raise SystemExit('缺少 --%s-box x,y,w,h（该 seed 实际站位）' % step)
         x, y, w, h = box
-        m = Image.new('L', (GEN_W, GEN_H), 0)
+        m = Image.new('L', (W, H), 0)
         m.paste(Image.new('L', (w, h), 255), (x, y))
         m = m.filter(ImageFilter.GaussianBlur(f['feather']))
         mpath = os.path.join(INPUT, 'g18in', name.replace('.png', '-mask.png'))
@@ -256,6 +261,65 @@ def sbs(final):
     print(dst, flush=True)
 
 
+# —— Qwen-Image-2.1 整图路线（README 路线1「已验证成功，全员合影版」；gen-bikini.cjs 同构）——
+# v7 终局：Illustrious 无主体底景必崩（粉肠船/米色空白），多角色同框必融合；
+# Qwen 文本编码认识海绵宝宝三角色，多人整图 + 绘画质感也更贴 swim-ref 风格锚。
+# 若单角色糊 → fix()（单 LoRA 区域 d1.0 二次出）对症修，issue 口径允许。
+QW_W, QW_H = 1088, 1920
+POS_QWEN = (
+  'Vertical phone wallpaper, no text, no watermark, no border. '
+  'SpongeBob SquarePants, Patrick Star and Sandy Cheeks from the SpongeBob SquarePants cartoon, '
+  'official 2D cartoon style with clean outlines, riding a big yellow inflatable banana-shaped boat '
+  'floating on a calm turquoise sea. The banana boat lies diagonally in the lower middle of the frame. '
+  'SpongeBob, the yellow sponge in his white shirt, red tie and brown shorts, sits relaxed at the left end '
+  'of the banana boat with a happy smile. Patrick, the pink starfish in green shorts, lies lazily on his '
+  'back in the middle with a dopey grin. Sandy, the squirrel in her white space suit with a round glass '
+  'helmet, sits at the right end holding a coconut drink with a straw. '
+  'Turquoise sea with clear gentle ripples and sparkling sun glitter. A straight horizon line in the '
+  'upper third, above it a soft orange and peach sunset sky with a warm glow. A small yellow starfish '
+  'floats on the water nearby. Relaxed summer vacation mood, bright saturated colors, crisp details.'
+)
+
+
+def qgen(seeds):
+    """整图 txt2img（Qwen-Image-2.1，1088x1920，euler/simple/cfg1/40 步 = gen-bikini 口径）。"""
+    res = round((QW_W * QW_H) ** 0.5 / 32) * 32
+    for s in seeds:
+        g = {
+          '1': {'class_type': 'UNETLoader', 'inputs': {'unet_name': 'qwen_image_2.1_bf16.safetensors', 'weight_dtype': 'default'}},
+          '2': {'class_type': 'CLIPLoader', 'inputs': {'clip_name': 'qwen_image_2.1_text_encoder.safetensors', 'type': 'qwen_image'}},
+          '3': {'class_type': 'VAELoader', 'inputs': {'vae_name': 'qwen_image_2.1_vae.safetensors'}},
+          '4': {'class_type': 'TextEncodeQwenImage21', 'inputs': {'clip': ['2', 0], 'prompt': POS_QWEN,
+                    'negative_prompt': 'text, watermark, signature, logo, border, frame, lowres, worst quality, blurry, extra characters',
+                    'resolution': min(res, 4096)}},
+          '6': {'class_type': 'EmptyLatentImage', 'inputs': {'width': QW_W, 'height': QW_H, 'batch_size': 1}},
+          '7': {'class_type': 'KSampler', 'inputs': {'model': ['1', 0], 'positive': ['4', 0], 'negative': ['4', 1],
+                    'latent_image': ['6', 0], 'seed': int(s), 'steps': 40, 'cfg': 1.0,
+                    'sampler_name': 'euler', 'scheduler': 'simple', 'denoise': 1.0}},
+          '8': {'class_type': 'VAEDecode', 'inputs': {'samples': ['7', 0], 'vae': ['3', 0]}},
+          '9': {'class_type': 'SaveImage', 'inputs': {'images': ['8', 0], 'filename_prefix': f'g18q/wp-banana-{s}'}},
+        }
+        e = wait(post('/prompt', {'prompt': g})['prompt_id'], timeout=3600)
+        print('q1', s, out_of(e, '9'), flush=True)
+
+
+def qfinal(raws):
+    """Qwen 原图居中裁 1080x1920 → FINAL（无放大，原生分辨率交付=最锐）。"""
+    for raw in raws:
+        src = raw if os.path.isabs(raw) else os.path.join(OUTDIR, 'g18q', raw)
+        seed = ''.join(ch for ch in os.path.basename(src) if ch.isdigit())[:5]
+        img = Image.open(src).convert('RGB')
+        w, h = img.size
+        tw, th = int(h * FW / FH + 0.5), h
+        if w > tw:
+            x0 = (w - tw) // 2
+            img = img.crop((x0, 0, x0 + tw, th))
+        img = img.resize((FW, FH), Image.LANCZOS)
+        dst = os.path.join(FINAL, 'wp-banana-' + seed + '.png')
+        img.save(dst)
+        print('qf ', dst, flush=True)
+
+
 if __name__ == '__main__':
     cmd = sys.argv[1]
     if cmd == 'gen':
@@ -267,6 +331,10 @@ if __name__ == '__main__':
             if flag in sys.argv:
                 boxes[key] = tuple(int(v) for v in sys.argv[sys.argv.index(flag) + 1].split(','))
         fix(sys.argv[2], sys.argv[sys.argv.index('--to') + 1] if '--to' in sys.argv else 'sb', boxes)
+    elif cmd == 'qgen':
+        qgen(sys.argv[sys.argv.index('--seeds') + 1].split(','))
+    elif cmd == 'qfinal':
+        qfinal(sys.argv[2:])
     elif cmd == 'up':
         up(sys.argv[2:])
     elif cmd == 'crop':

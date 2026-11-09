@@ -1,17 +1,23 @@
-== pass1 整图（无角色 LoRA）==
-flat 2d cartoon, tv cartoon style, clean lineart, simple shading, vibrant colors, turquoise ocean water, clear water ripples, sparkling sun glitter reflections, straight clear horizon line one third down from the top, sunset sky occupying the top third of the image, sea occupying the lower two thirds, soft orange peach sunset glow above the horizon, sunset light reflection on the water, a long yellow inflatable banana boat floating diagonally on the turquoise sea in the lower middle of the image, water splashes and reflection under the hull, three cartoon characters riding on the banana boat, yellow porous rectangular sponge man wearing white shirt red tie brown shorts red striped socks, sitting relaxed at the left end of the banana boat, happy smile, pink starfish wearing green shorts lying on his back on the middle of the banana boat, dopey happy smile, squirrel in white astronaut suit with round glass helmet sitting at the right end of the banana boat, holding a brown coconut drink with a straw in both hands, a small yellow starfish floating on the water nearby, exactly three characters, each with own separate body, no humans, no text, no watermark
+== 终局路线 qgen：Qwen-Image-2.1 整图直出 1088x1920 euler/simple cfg1 40步 ==
 
-== sb 区域二出（sbpilot.safetensors@0.85）==
+-- prompt --
+Vertical phone wallpaper, no text, no watermark, no border. SpongeBob SquarePants, Patrick Star and Sandy Cheeks from the SpongeBob SquarePants cartoon, official 2D cartoon style with clean outlines, riding a big yellow inflatable banana-shaped boat floating on a calm turquoise sea. The banana boat lies diagonally in the lower middle of the frame. SpongeBob, the yellow sponge in his white shirt, red tie and brown shorts, sits relaxed at the left end of the banana boat with a happy smile. Patrick, the pink starfish in green shorts, lies lazily on his back in the middle with a dopey grin. Sandy, the squirrel in her white space suit with a round glass helmet, sits at the right end holding a coconut drink with a straw. Turquoise sea with clear gentle ripples and sparkling sun glitter. A straight horizon line in the upper third, above it a soft orange and peach sunset sky with a warm glow. A small yellow starfish floats on the water nearby. Relaxed summer vacation mood, bright saturated colors, crisp details.
+
+-- negative --
+text, watermark, signature, logo, border, frame, lowres, worst quality, blurry, extra characters
+
+== 对症 fix：单 LoRA 角色区域 d1.0 inpaint（illustriousXL, CLIP-2, 30步 dpmpp_2m karras cfg5.5）==
+
+-- sb（sbpilot.safetensors@0.85）--
 spongebob squarepants, yellow porous sponge, square body, big blue eyes, buck teeth, white shirt, red tie, brown shorts, red striped socks, black shoes, happy relaxed smile, sitting on the yellow banana boat, legs resting forward on the banana surface, both arms fully visible away from body, open hands, the yellow banana boat surface under him, calm turquoise ocean water and soft sunset light around, flat 2d cartoon, tv cartoon style, clean lineart, simple shading
 
-== pat 区域二出（Patrick_il.safetensors@1.0）==
+-- pat（Patrick_il.safetensors@1.0）--
 p4tr1ckst4r, official style, starfish, pink skin, green shorts, lying on his back on the yellow banana boat, relaxed dopey happy open mouth smile, both stubby arms and legs fully visible, the yellow banana boat surface under his body, calm turquoise ocean water and soft sunset light around, flat 2d cartoon, tv cartoon style, clean lineart, simple shading
 
-== sandy 区域二出（Sandy_il.safetensors@1.0）==
+-- sandy（Sandy_il.safetensors@1.0）--
 sandycheeks, squirrel in white astronaut suit with round transparent glass space helmet, helmet interior fully transparent, only a plain thin white helmet ring outline, no grey glass fill, brown fur, friendly smile, sitting on the yellow banana boat, holding a brown coconut drink with a straw in both hands in front of her chest, the yellow banana boat surface under her, calm turquoise ocean water and soft sunset light around, flat 2d cartoon, tv cartoon style, clean lineart, simple shading
 
-== NEG ==
+-- NEG --
 text, watermark, signature, logo, lowres, worst quality, jpeg artifacts, photorealistic, realistic photo, blurry, blur, depth of field, pastel washed out, crayon, sketch, anime style, chibi, big eyed anime girl, extra characters, four characters, five characters, duplicated character, duplicate person, fused characters, merged characters, hybrid creature, conjoined bodies, crowd, group of people, extra heads, missing head, missing arm, missing hands, missing leg, missing fingers, extra finger, extra arms, extra hands, extra legs, fused fingers, mitten hands, deformed hands, blob hands, hands hidden, arms behind back, cropped, cut off, out of frame, partial body, patrick wearing shirt, patrick red skin, patrick brown skin, brown starfish, grey opaque helmet, mustache on sandy, three shoes, floating shoe, human face on character, night, dark sky, rainbow, whales, boats with sails, motor boat
 
-管线: illustriousXL_v01, CLIP-2, 30步 dpmpp_2m karras, cfg 5.5, 768x1344;
-高清化 Remacri x2 → 9:16 居中裁 → LANCZOS 1080x1920
+== 留档：Illustrious 整图底尝试（v1-v7，均否，见 PR 自查记录）==
