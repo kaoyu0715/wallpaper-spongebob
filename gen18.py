@@ -266,6 +266,7 @@ def sbs(final):
 # Qwen 文本编码认识海绵宝宝三角色，多人整图 + 绘画质感也更贴 swim-ref 风格锚。
 # 若单角色糊 → fix()（单 LoRA 区域 d1.0 二次出）对症修，issue 口径允许。
 QW_W, QW_H = 1088, 1920
+# 口径 = 本机 ComfyUI 历史成功 Qwen-Image-2.1 图（CLIP=qwen3vl_8b_bf16、cfg1、euler/simple）
 POS_QWEN = (
   'Vertical phone wallpaper, no text, no watermark, no border. '
   'SpongeBob SquarePants, Patrick Star and Sandy Cheeks from the SpongeBob SquarePants cartoon, '
@@ -282,19 +283,19 @@ POS_QWEN = (
 
 
 def qgen(seeds):
-    """整图 txt2img（Qwen-Image-2.1，1088x1920，euler/simple/cfg1/40 步 = gen-bikini 口径）。"""
+    """整图 txt2img（Qwen-Image-2.1，1088x1920，euler/simple/cfg1/20 步=本机历史口径）。"""
     res = round((QW_W * QW_H) ** 0.5 / 32) * 32
     for s in seeds:
         g = {
           '1': {'class_type': 'UNETLoader', 'inputs': {'unet_name': 'qwen_image_2.1_bf16.safetensors', 'weight_dtype': 'default'}},
-          '2': {'class_type': 'CLIPLoader', 'inputs': {'clip_name': 'qwen_image_2.1_text_encoder.safetensors', 'type': 'qwen_image'}},
-          '3': {'class_type': 'VAELoader', 'inputs': {'vae_name': 'qwen_image_2.1_vae.safetensors'}},
+          '2': {'class_type': 'CLIPLoader', 'inputs': {'clip_name': 'qwen3vl_8b_bf16.safetensors', 'type': 'qwen_image', 'device': 'default'}},
+          '3': {'class_type': 'VAELoader', 'inputs': {'vae_name': 'qwen_image_2.1_vae_bf16.safetensors'}},
           '4': {'class_type': 'TextEncodeQwenImage21', 'inputs': {'clip': ['2', 0], 'prompt': POS_QWEN,
                     'negative_prompt': 'text, watermark, signature, logo, border, frame, lowres, worst quality, blurry, extra characters',
                     'resolution': min(res, 4096)}},
           '6': {'class_type': 'EmptyLatentImage', 'inputs': {'width': QW_W, 'height': QW_H, 'batch_size': 1}},
           '7': {'class_type': 'KSampler', 'inputs': {'model': ['1', 0], 'positive': ['4', 0], 'negative': ['4', 1],
-                    'latent_image': ['6', 0], 'seed': int(s), 'steps': 40, 'cfg': 1.0,
+                    'latent_image': ['6', 0], 'seed': int(s), 'steps': 20, 'cfg': 1.0,
                     'sampler_name': 'euler', 'scheduler': 'simple', 'denoise': 1.0}},
           '8': {'class_type': 'VAEDecode', 'inputs': {'samples': ['7', 0], 'vae': ['3', 0]}},
           '9': {'class_type': 'SaveImage', 'inputs': {'images': ['8', 0], 'filename_prefix': f'g18q/wp-banana-{s}'}},
