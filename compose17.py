@@ -45,58 +45,53 @@ POSE = {
 
 WARM = (255, 214, 178)
 
-INPAINT_POS = ('empty swim ring floating on calm teal sea with nobody inside, empty ring hole filled '
-               'with calm teal sea water and soft ripples, gentle current shading, subtle darker '
-               'shadow near where a body was, wherever the body was in front of the far ring tube '
-               'the striped swim ring tube continues naturally, open sea surface, no horizon, no sky')
-INPAINT_NEG = ('flat solid color, solid fill, white foam, clouds, body parts, arm, leg, hand, foot, '
-               'fish, fins, character, donut, ring tube in front, object, person, text, '
-               'person, human, girl, boy, woman, man, child, face, hair, eyes, nose, mouth, '
-               'skin, neck, shoulders, chest, collarbone, bikini, swimsuit, swimwear, shirt, clothes')
+INPAINT_TXT = {
+  'w': ('calm open teal sea surface with soft ripples and gentle current shading, seamless continuation '
+        'of the surrounding water, subtle darker depth shading, no objects, no horizon, no sky',
+        'person, human, girl, boy, woman, man, face, hair, eyes, arms, legs, body, skin, bikini, '
+        'swimsuit, clothes, fish, fins, donut, swim ring, inflatable ring, torus, circle, tube, '
+        'flat solid color, uniform gray, white foam, clouds, text, object'),
+  'tube': {
+      'fish1': ('the red and white striped inflatable swim ring tube continues naturally behind with '
+                'the same curvature and glossy shading, open sea around',
+                'person, human, girl, face, hair, limbs, body, fish, fins, second ring, extra ring, '
+                'donut floating in water, blue stripes, flat color, text'),
+      'fish2': ('the blue and white striped inflatable swim ring tube continues naturally behind with '
+                'the same curvature and glossy shading, open sea around',
+                'person, human, girl, face, hair, limbs, body, fish, fins, second ring, extra ring, '
+                'donut floating in water, red stripes, flat color, text'),
+      'fish3': ('the blue and white striped inflatable swim ring tube continues naturally behind with '
+                'the same curvature and glossy shading, open sea around',
+                'person, human, girl, face, hair, limbs, body, fish, fins, second ring, extra ring, '
+                'donut floating in water, red stripes, flat color, text')}}
 
 
 def _ell_img(mask, box):
     return mask.crop(box)
 
 
-def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_only=False):
-    """① erase-inpaint：在 stage 裁片上对 erase 掩膜 d1.0 重绘海水/管后带。"""
-    stage = Image.open(stage_in) if stage_in else Image.open(REF).convert('RGB')
-    x0, y0, x1, y1 = mask17.CROPS[fish]
-    crop = stage.crop((x0, y0, x1, y1))
+def _inpaint_pass(fish, seed, tag, base_bin, stage, crop_box, upscale):
+    """单次补画：base_bin(1x硬掩膜)→羽化→d1.0→内收贴回 stage，返回新 stage。"""
+    x0, y0, x1, y1 = crop_box
     W, H = int((x1 - x0) * upscale) // 8 * 8, int((y1 - y0) * upscale) // 8 * 8
-    m = mask17.erase_mask(fish).crop((x0, y0, x1, y1)).resize((W, H), Image.LANCZOS)
-    name = 'g17in-%s-%d' % (fish, seed)
+    m = Image.fromarray((base_bin * 255).astype('uint8')).filter(ImageFilter.GaussianBlur(4))
+    m = m.point(lambda v: 255 if v > 128 else (0 if v < 20 else v))
+    m = m.crop((x0, y0, x1, y1)).resize((W, H), Image.LANCZOS)
+    name = 'g17in-%s-%d-%s' % (fish, seed, tag)
     d = os.path.join(G.INPUT, 'g17in')
     os.makedirs(d, exist_ok=True)
-    big = crop.resize((W, H), Image.LANCZOS)
-    # Fooocus 式预填充——归一化卷积：颜色只从掩膜外（水/管）扩散进掩膜，
-    # 旧鱼色彩不参与（blur30 直接模糊含鱼图会留鱼形鬼影——512/522 号实测教训），
-    # 随后 d0.8 在该无鱼底色上重建（d1.0 大掩膜又会画出新人/新圈——501/511/521 教训）。
-    mh = m.point(lambda v: 255 if v > 127 else 0)
-    barr = np.asarray(big).astype(np.float32)
-    wa = 255.0 - np.asarray(m).astype(np.float32)          # 软权重：掩膜内=0
-    fill = barr.copy()
-    mh_b = np.asarray(mh) > 127
-    for r in (15, 40, 100, 240):          # 多尺度传播，直到掩膜深处也有颜色
-        r = int(r * upscale)
-        den = np.asarray(Image.fromarray(wa.astype('uint8')).filter(ImageFilter.GaussianBlur(r))).astype(np.float32)
-        ok = den > 30.0
-        den = np.maximum(den, 1.0)
-        for i in range(3):
-            num = np.asarray(Image.fromarray(np.clip(barr[:, :, i] * wa / 255.0, 0, 255).astype('uint8'))
-                             .filter(ImageFilter.GaussianBlur(r))).astype(np.float32)
-            v = np.clip(num * 255.0 / den, 0, 255)
-            fill[:, :, i] = np.where(ok, v, fill[:, :, i])
-    pre = Image.fromarray(fill.astype('uint8'))
-    big = Image.composite(pre, big, mh)
+    big = stage.crop((x0, y0, x1, y1)).resize((W, H), Image.LANCZOS)
     big.save(os.path.join(d, name + '.png'))
     m.save(os.path.join(d, name + '-mask.png'))
+    key = 'tube' if tag == 'tube' else 'w'
+    pos, neg = INPAINT_TXT[key]['fish1'] if key == 'tube' else INPAINT_TXT['w']
+    if key == 'tube':
+        pos, neg = INPAINT_TXT['tube'][fish]
     g = {
       '1': {'class_type': 'CheckpointLoaderSimple', 'inputs': {'ckpt_name': 'illustriousXL_v01.safetensors'}},
       '3': {'class_type': 'CLIPSetLastLayer', 'inputs': {'clip': ['1', 1], 'stop_at_clip_layer': -2}},
-      '4': {'class_type': 'CLIPTextEncode', 'inputs': {'clip': ['3', 0], 'text': INPAINT_POS}},
-      '5': {'class_type': 'CLIPTextEncode', 'inputs': {'clip': ['3', 0], 'text': INPAINT_NEG}},
+      '4': {'class_type': 'CLIPTextEncode', 'inputs': {'clip': ['3', 0], 'text': pos}},
+      '5': {'class_type': 'CLIPTextEncode', 'inputs': {'clip': ['3', 0], 'text': neg}},
       '6': {'class_type': 'LoadImage', 'inputs': {'image': 'g17in/' + name + '.png'}},
       '7': {'class_type': 'LoadImage', 'inputs': {'image': 'g17in/' + name + '-mask.png'}},
       '7b': {'class_type': 'ImageToMask', 'inputs': {'image': ['7', 0], 'channel': 'red'}},
@@ -104,24 +99,41 @@ def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_
               'vae': ['1', 2], 'pixels': ['6', 0], 'mask': ['7b', 0], 'noise_mask': True}},
       '10': {'class_type': 'KSampler', 'inputs': {'model': ['1', 0], 'positive': ['8', 0], 'negative': ['8', 1],
                'latent_image': ['8', 2], 'seed': int(seed), 'steps': 30, 'cfg': 5.5,
-               'sampler_name': 'dpmpp_2m', 'scheduler': 'karras', 'denoise': 0.8}},
+               'sampler_name': 'dpmpp_2m', 'karras': True, 'denoise': 1.0,
+               'scheduler': 'karras'}},
       '11': {'class_type': 'VAEDecode', 'inputs': {'samples': ['10', 0], 'vae': ['1', 2]}},
       '12': {'class_type': 'SaveImage', 'inputs': {'images': ['11', 0], 'filename_prefix': 'g17hole/' + name}},
     }
+    g['10']['inputs'].pop('karras')
     import gen17unit
     e = G.wait(gen17unit._submit(g))
     p = G.out_of(e, '12')
-    print('inpaint', fish, 'seed', seed, '->', p, flush=True)
-    if mask_only:
-        return p
+    print('inpaint', fish, tag, 'seed', seed, '->', p, flush=True)
     im = Image.open(p).convert('RGB').resize((x1 - x0, y1 - y0), Image.LANCZOS)
-    out = stage.convert('RGB').copy()
-    pm = m.resize((x1 - x0, y1 - y0), Image.LANCZOS).filter(ImageFilter.MinFilter(9))  # 内收4px
+    pm = m.filter(ImageFilter.MinFilter(9)).filter(ImageFilter.GaussianBlur(2))
     pm = pm.point(lambda v: 255 if v > 200 else (0 if v < 20 else v))
-    pm = pm.filter(ImageFilter.GaussianBlur(2))
+    out = stage.convert('RGB').copy()
     out.paste(im, (x0, y0), pm)
+    return out
+
+
+def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_only=False):
+    """① 两段 erase-inpaint（均 d1.0，无预填充——预填充实测要么留鱼鬼影要么死色平涂）：
+       先海水段（足迹¬管带），后管体段（足迹∧管带，圈条带自然延续）。"""
+    import mask17 as _m
+    stage = Image.open(stage_in) if stage_in else Image.open(REF).convert('RGB')
+    box = mask17.CROPS[fish]
+    fp = np.asarray(_m.footprint(fish, margin=14)) > 127
+    fb = np.asarray(_m.front_band(fish)) > 0
+    limbs = np.asarray(_m.old_limbs(fish, dil=4)) > 0
+    tube = np.asarray(_m.tube_band(fish)) > 0
+    base = fp & (~fb | limbs)
+    if fish == 'fish1':
+        base = base & ~(np.asarray(_m.zz_letters()) > 0)
+    for tag, sel in (('water', base & ~tube), ('tube', base & tube)):
+        stage = _inpaint_pass(fish, seed, tag, sel, stage, box, upscale)
     dst = stage_out or 'output/stage17-%s-inp.png' % fish
-    out.save(dst)
+    stage.save(dst)
     print('stage ->', dst)
     return dst
 
