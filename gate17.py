@@ -67,6 +67,11 @@ def check(fish, stage_path, name, zoom=2.4):
     keep_ring = fb & ~E & ~_limb_on_tube
     vr = int((d[keep_ring] > 0).sum())
     print('%s: 前缘带(¬肢体)差异像素 = %d / %d (要求 0)' % (fish, vr, keep_ring.sum()))
+    # ZZ 字标像素级保留断言（fish1）
+    if fish == 'fish1':
+        zz = np.asarray(mask17.zz_letters()) > 0
+        vz = int((d[zz] > 0).sum())
+        print('%s: ZZ 差异像素 = %d / %d (要求 0)' % (fish, vz, zz.sum()))
     # 躯干覆盖硬闸（用户裁决 2026-11-09）：旧鱼躯干掩膜区（抠图α¬管带¬ZZ）
     # 必须被新角色像素完整覆盖——「圈里只剩头/鞋/底片补丁色」必须过不了闸。
     ox, oy = mask17.cut_origins()[fish]
