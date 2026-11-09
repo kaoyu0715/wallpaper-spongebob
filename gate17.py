@@ -40,8 +40,10 @@ def check(fish, stage_path, name, zoom=2.4):
     out = d[~zone]
     viol = int((out > 0).sum())
     print('%s: 改动域外差异像素 = %d / %d (要求 0)' % (fish, viol, out.size))
-    # 前缘带（非肢体区）逐像素一致断言
+    # 前缘带（非肢体区）逐像素一致断言；
+    # 「旧肢体压管」区除外——那里是鱼像素（旧鞋/旧鳍），设计上由补画重绘成管面。
     fb = np.asarray(mask17.front_band(fish)) > 0
+    _limb_on_tube = np.asarray(mask17.old_limbs(fish, dil=8)) > 0
     cfg = compose17.POSE[fish]
     E_limbs = mask17.old_limbs(fish, dil=cfg['limb_dil'])
     if cfg.get('unit'):
@@ -51,7 +53,7 @@ def check(fish, stage_path, name, zoom=2.4):
                                        a).filter(ImageFilter.MaxFilter(7))) > 0
     else:
         E = np.zeros_like(fb)
-    keep_ring = fb & ~E
+    keep_ring = fb & ~E & ~_limb_on_tube
     vr = int((d[keep_ring] > 0).sum())
     print('%s: 前缘带(¬肢体)差异像素 = %d / %d (要求 0)' % (fish, vr, keep_ring.sum()))
     # 并排过闸图

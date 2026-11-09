@@ -29,22 +29,30 @@ os.makedirs('output', exist_ok=True)
 
 # —— 姿态对位表（样张坐标；全部状态。anchor=单元 alpha 包围盒中心落点，
 #     s=贴入比(按收紧后 bbox)，tilt=顺时针°，limb_dil=骨架肢体区外扩）——
+POSDIR = '/mnt/g/workspace/comfyui/output/g17cut'
 POSE = {
-  'fish1': dict(unit=None, anchor=(306, 1042), s=0.30, tilt=4, limb_dil=9,
+  # 选定单元与对位参数（fit1..3 迭代确定；flip=水平镜像对齐样张头向）
+  'fish1': dict(unit=POSDIR + '/sb-ring17f-sb-ring17f-7153_00001__00001-post.png',
+                anchor=(272, 1062), s=0.235, tilt=2, flip=True, limb_dil=9,
                 shadow=(0.16, 8), warm=0.07),
-  'fish2': dict(unit=None, anchor=(716, 812), s=0.34, tilt=-3, limb_dil=9,
+  'fish2': dict(unit=POSDIR + '/pat-ring17-pat-ring17-7204_00001__00001-post.png',
+                anchor=(720, 820), s=0.28, tilt=4, flip=True, limb_dil=9,
                 shadow=(0.16, 8), warm=0.07),
-  'fish3': dict(unit=None, anchor=(658, 1262), s=0.34, tilt=-2, limb_dil=9,
+  'fish3': dict(unit=POSDIR + '/san-ring17c-san-ring17c-7322_00001__00001-post.png',
+                anchor=(665, 1252), s=0.285, tilt=-15, limb_dil=9,
                 shadow=(0.16, 8), warm=0.07),
 }
 
 WARM = (255, 214, 178)
 
-INPAINT_POS = ('calm teal sea water with soft ripples and gentle current shading, subtle darker '
+INPAINT_POS = ('empty swim ring floating on calm teal sea with nobody inside, empty ring hole filled '
+               'with calm teal sea water and soft ripples, gentle current shading, subtle darker '
                'shadow near where a body was, wherever the body was in front of the far ring tube '
                'the striped swim ring tube continues naturally, open sea surface, no horizon, no sky')
 INPAINT_NEG = ('flat solid color, solid fill, white foam, clouds, body parts, arm, leg, hand, foot, '
-               'fish, fins, character, donut, ring tube in front, object, person, text')
+               'fish, fins, character, donut, ring tube in front, object, person, text, '
+               'person, human, girl, boy, woman, man, child, face, hair, eyes, nose, mouth, '
+               'skin, neck, shoulders, chest, collarbone, bikini, swimsuit, swimwear, shirt, clothes')
 
 
 def _ell_img(mask, box):
@@ -59,9 +67,11 @@ def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_
     W, H = int((x1 - x0) * upscale) // 8 * 8, int((y1 - y0) * upscale) // 8 * 8
     m = mask17.erase_mask(fish).crop((x0, y0, x1, y1)).resize((W, H), Image.LANCZOS)
     name = 'g17in-%s-%d' % (fish, seed)
+    d = os.path.join(G.INPUT, 'g17in')
+    os.makedirs(d, exist_ok=True)
     big = crop.resize((W, H), Image.LANCZOS)
-    big.save(os.path.join(IN_DIR, name + '.png'))
-    m.save(os.path.join(IN_DIR, name + '-mask.png'))
+    big.save(os.path.join(d, name + '.png'))
+    m.save(os.path.join(d, name + '-mask.png'))
     g = {
       '1': {'class_type': 'CheckpointLoaderSimple', 'inputs': {'ckpt_name': 'illustriousXL_v01.safetensors'}},
       '3': {'class_type': 'CLIPSetLastLayer', 'inputs': {'clip': ['1', 1], 'stop_at_clip_layer': -2}},
@@ -86,7 +96,9 @@ def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_
         return p
     im = Image.open(p).convert('RGB').resize((x1 - x0, y1 - y0), Image.LANCZOS)
     out = stage.convert('RGB').copy()
-    out.paste(im, (x0, y0), m.resize((x1 - x0, y1 - y0), Image.LANCZOS).filter(ImageFilter.GaussianBlur(3)))
+    pm = m.resize((x1 - x0, y1 - y0), Image.LANCZOS).filter(ImageFilter.MinFilter(5))  # 内收2px
+    pm = pm.filter(ImageFilter.GaussianBlur(2))
+    out.paste(im, (x0, y0), pm)
     dst = stage_out or 'output/stage17-%s-inp.png' % fish
     out.save(dst)
     print('stage ->', dst)
@@ -97,6 +109,8 @@ def _unit_layer(fish, p):
     """单元 RGBA → 全幅 RGBA 层（缩放/倾斜/落位 + 贴入比打印）。"""
     cfg = POSE[fish]
     unit = Image.open(cfg['unit']).convert('RGBA')
+    if cfg.get('flip'):
+        unit = unit.transpose(Image.FLIP_LEFT_RIGHT)
     w, h = unit.size
     s = cfg['s']
     Wu, Hu = max(1, int(round(w * s))), max(1, int(round(h * s)))
@@ -148,8 +162,12 @@ def region_composite(fish, stage_in=None, out=None, inpainted=None):
     whole.paste(warmu, (px, py))
     a = whole.split()[3].filter(ImageFilter.GaussianBlur(1.5))
     out_im = Image.composite(whole.convert('RGB'), out_im, a)
-    # ③ 前缘带贴回样张像素（圈前缘压身）
+    # ③ 前缘带贴回样张像素（圈前缘压身）——但「旧肢体压管」区不贴回
+    #   （旧鞋/旧鳍是鱼像素，已由 erase_mask 送补画；贴回会复发「鱼穿裤子」）
     fb = mask17.front_band(fish)
+    _fbn = np.asarray(fb).copy()
+    _fbn[np.asarray(mask17.old_limbs(fish, dil=3)) > 0] = 0
+    fb = Image.fromarray(_fbn).filter(ImageFilter.GaussianBlur(1.5))
     out_im = Image.composite(ref, out_im, fb)
     # ④ 骨架肢体区：旧肢体 ∧ 新单元 → 压在管上
     old_limbs = mask17.old_limbs(fish, dil=cfg['limb_dil'])
@@ -167,6 +185,22 @@ def region_composite(fish, stage_in=None, out=None, inpainted=None):
                           E.point(lambda v: int(v * 0.6)))
     dbg.save('output/g17-%s-limbs.png' % fish)
     return dst
+
+
+def fit_preview(fish, unit, s, anchor, tilt, limb_dil=None, tag='fit'):
+    """姿态对位预览：区域②③④直接叠在样张上（无补画），输出 2.4x 并排。"""
+    import sbs16
+    cfg = POSE[fish]
+    cfg.update(unit=unit, s=s, tilt=tilt)
+    cfg['anchor'] = tuple(anchor)
+    if limb_dil is not None:
+        cfg['limb_dil'] = limb_dil
+    out = 'output/g17-%s-%s-reg.png' % (fish, tag)
+    region_composite(fish, stage_in=REF, out=out)
+    p = 'output/g17-%s-%s-sbs.png' % (fish, tag)
+    sbs16.sbs(out, mask17.CROPS[fish], p, zoom=2.4, la='样张同区', lb='%s 姿态预览 %s' % (fish, tag))
+    print('sbs ->', p)
+    return p
 
 
 def main_chain(i1, i2, i3, out):
@@ -223,6 +257,12 @@ if __name__ == '__main__':
     a3 = sub.add_parser('outpaint')
     a3.add_argument('--in', dest='inp', required=True); a3.add_argument('--out', required=True)
     a3.add_argument('--seed', type=int, default=20261108); a3.add_argument('--seam', type=int, default=40)
+    a5 = sub.add_parser('iter')
+    a5.add_argument('--fish', required=True); a5.add_argument('--unit', required=True)
+    a5.add_argument('--s', type=float, required=True)
+    a5.add_argument('--anchor', required=True); a5.add_argument('--tilt', type=float, default=0.0)
+    a5.add_argument('--limb-dil', type=int, default=None); a5.add_argument('--tag', default='fit')
+    a5.add_argument('--flip', type=int, default=None)
     a4 = sub.add_parser('maskprobe')
     a = ap.parse_args()
     if a.cmd == 'inpaint':
@@ -233,6 +273,12 @@ if __name__ == '__main__':
         main_chain(a.i1, a.i2, a.i3, a.out)
     elif a.cmd == 'outpaint':
         outpaint(a.inp, a.out, a.seed, a.seam)
+    elif a.cmd == 'iter':
+        x, y = (int(v) for v in a.anchor.split(','))
+        if a.flip is not None:
+            compose17_flip = POSE[a.fish]
+            compose17_flip['flip'] = bool(a.flip)
+        fit_preview(a.fish, a.unit, a.s, (x, y), a.tilt, a.limb_dil, a.tag)
     elif a.cmd == 'maskprobe':
         for f in mask17.CROPS:
             fp = mask17.footprint(f)

@@ -141,11 +141,14 @@ def old_limbs(fish, size=REF_SIZE, dil=0):
 
 
 def erase_mask(fish, size=REF_SIZE, margin=14, feather=5):
-    """内孔/上身补画区 = 足迹 ∧ ¬前缘带 ∧ ¬ZZ（前缘与字母像素动不得）。"""
+    """旧鱼足迹补画区 = 足迹 ∧ (¬前缘带 ∨ 旧肢体压管区) ∧ ¬ZZ。
+    前缘管体像素动不得（贴回样张），但「旧肢体压管」的鱼像素（旧鞋/旧鳍/旧手）
+    不贴回——并入补画区重绘成管面，杜绝「鱼穿裤子」残留（十七代教训核心）。"""
     fp = np.asarray(footprint(fish, size, margin=margin)) > 127
     fb = np.asarray(front_band(fish, size)) > 0
+    limbs = np.asarray(old_limbs(fish, size=size, dil=4)) > 0
     zz = np.asarray(zz_letters(size)) > 0
-    m = fp & ~fb
+    m = fp & (~fb | limbs)
     if fish == 'fish1':
         m = m & ~zz
     im = Image.fromarray((m * 255).astype('uint8'))
