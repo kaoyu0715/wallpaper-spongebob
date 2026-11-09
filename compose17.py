@@ -81,6 +81,25 @@ def _inpaint_pass(fish, seed, tag, base_bin, stage, crop_box, upscale):
     d = os.path.join(G.INPUT, 'g17in')
     os.makedirs(d, exist_ok=True)
     big = stage.crop((x0, y0, x1, y1)).resize((W, H), Image.LANCZOS)
+    # d0.95 + 无鱼归一化卷积底色（掩膜外颜色多尺度扩散进掩膜）：
+    # 平涂死色（0.8 实测）与 hallucination（1.0 实测）之间的折中。
+    barr = np.asarray(big).astype(np.float32)
+    wsm = np.asarray(m).astype(np.float32)            # 掩膜内=1 → 权重=0
+    wmt = Image.fromarray((255.0 - wsm).astype('uint8'))
+    wa = np.asarray(wmt).astype(np.float32)
+    fill = barr.copy()
+    for r in (15, 40, 100, 240):
+        rr = int(r * upscale)
+        den = np.asarray(wmt.filter(ImageFilter.GaussianBlur(rr))).astype(np.float32)
+        ok = den > 30.0
+        den = np.maximum(den, 1.0)
+        for i in range(3):
+            num = np.asarray(Image.fromarray(np.clip(barr[:, :, i] * wa / 255.0, 0, 255).astype('uint8'))
+                             .filter(ImageFilter.GaussianBlur(rr))).astype(np.float32)
+            v = np.clip(num * 255.0 / den, 0, 255)
+            fill[:, :, i] = np.where(ok, v, fill[:, :, i])
+    mhard = m.point(lambda v: 255 if v > 127 else 0)
+    big = Image.composite(Image.fromarray(fill.astype('uint8')), big, mhard)
     big.save(os.path.join(d, name + '.png'))
     m.save(os.path.join(d, name + '-mask.png'))
     key = 'tube' if tag == 'tube' else 'w'
@@ -99,7 +118,7 @@ def _inpaint_pass(fish, seed, tag, base_bin, stage, crop_box, upscale):
               'vae': ['1', 2], 'pixels': ['6', 0], 'mask': ['7b', 0], 'noise_mask': True}},
       '10': {'class_type': 'KSampler', 'inputs': {'model': ['1', 0], 'positive': ['8', 0], 'negative': ['8', 1],
                'latent_image': ['8', 2], 'seed': int(seed), 'steps': 30, 'cfg': 5.5,
-               'sampler_name': 'dpmpp_2m', 'karras': True, 'denoise': 1.0,
+               'sampler_name': 'dpmpp_2m', 'karras': True, 'denoise': 0.95,
                'scheduler': 'karras'}},
       '11': {'class_type': 'VAEDecode', 'inputs': {'samples': ['10', 0], 'vae': ['1', 2]}},
       '12': {'class_type': 'SaveImage', 'inputs': {'images': ['11', 0], 'filename_prefix': 'g17hole/' + name}},
@@ -110,7 +129,8 @@ def _inpaint_pass(fish, seed, tag, base_bin, stage, crop_box, upscale):
     p = G.out_of(e, '12')
     print('inpaint', fish, tag, 'seed', seed, '->', p, flush=True)
     im = Image.open(p).convert('RGB').resize((x1 - x0, y1 - y0), Image.LANCZOS)
-    pm = m.filter(ImageFilter.MinFilter(9)).filter(ImageFilter.GaussianBlur(2))
+    pm = m.filter(ImageFilter.MinFilter(9)).resize((x1 - x0, y1 - y0), Image.LANCZOS)
+    pm = pm.filter(ImageFilter.GaussianBlur(2))
     pm = pm.point(lambda v: 255 if v > 200 else (0 if v < 20 else v))
     out = stage.convert('RGB').copy()
     out.paste(im, (x0, y0), pm)
