@@ -41,7 +41,7 @@ POSE = {
   'fish2': dict(unit=POSDIR + '/pat-ring17-pat-ring17-7204_00001__00001-post.png',
                 anchor=(720, 820), s=0.28, tilt=4, flip=True, limb_dil=9,
                 shadow=(0.16, 8), warm=0.07),
-  'fish3': dict(unit=POSDIR + '/san-ring17c-san-ring17c-7322_00001__00001-post.png',
+  'fish3': dict(unit=POSDIR + '/san-ring17c-san-ring17c-7324_00001__00001-post.png',
                 anchor=(665, 1252), s=0.285, tilt=-15, limb_dil=9,
                 shadow=(0.16, 8), warm=0.07),
 }
@@ -307,14 +307,16 @@ def tube_fill(fish, sel, stage):
     # 可见管面 = 管带 ∧ ¬ZZ——遮挡体不可几何确定（ringcut α 含整圈：fish2 实测
     # 肢体∧管=全部管；足迹 margin0 也吞圈），改由统计法剔除鱼染箱（下方离群判定）。
     vis = tube & ~zz
+    # 只允许条纹色进分箱源——鱼鳍/花环/肤色 AA 一律排除；
+    # 仅用于 bin 清洗，非圈保护掩膜（issue① 禁的是 chroma 保圈掩膜）。
+    arr0 = np.asarray(stage).astype(int)
+    Rr, Gg, Bb = arr0[:, :, 0], arr0[:, :, 1], arr0[:, :, 2]
+    white = (Rr > 190) & (Gg > 170) & (Bb > 170)
     if fish == 'fish1':
-        # 只允许条纹色进分箱源（红/白族）——鳍黄、橙、紫暗、绿 AA 一律排除；
-        # 仅用于 bin 清洗，非圈保护掩膜（issue① 禁的是 chroma 保圈掩膜）。
-        arr0 = np.asarray(stage).astype(int)
-        Rr, Gg, Bb = arr0[:, :, 0], arr0[:, :, 1], arr0[:, :, 2]
-        red = (Rr > 140) & (Rr - Gg > 80) & (Bb < 100)
-        white = (Rr > 190) & (Gg > 170) & (Bb > 170)
-        vis = vis & (red | white)
+        stripe = ((Rr > 140) & (Rr - Gg > 80) & (Bb < 100)) | white
+    else:
+        stripe = ((Bb > 140) & (Bb - Rr > 40)) | white
+    vis = vis & stripe
     arr = np.asarray(stage).astype(np.float64)
     cells = np.full((NB, NV, 3), np.nan)
     idx = ub[vis] * NV + vb[vis]
@@ -507,9 +509,12 @@ def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_
     srcok = ~tube & ~base & ~zz & ~finref
     mx = stg2.max(-1); mn = stg2.min(-1)
     grayflat = (mx - mn < 26) & (stg2.mean(-1) > 90) & (stg2.mean(-1) < 195)
-    # 孔内水=供体（REF 平移克隆实测：浅=平淡、深=暗影池，皆不贴样张光照；供体灰平但可接受）。
-    outer_water = (base & ~tube & ~hole & grayflat if fish != 'fish1'
-                   else rem & ~hole & ~tube)
+    # 灰平残余（含 fish2/3 孔内 conv 灰斑）→ REF 平移克隆。fish1 孔内水保留供体
+    # （REF 平移实测：浅=平淡、深=暗影池，皆不贴样张光照）。
+    outer_water = base & ~tube & grayflat
+    if fish == 'fish1':
+        outer_water = outer_water & ~hole
+    cloned = np.zeros_like(tube)
     for (dx, dy) in ((0, 34), (-34, 20), (34, 20), (-48, -14), (48, -14), (0, -34), (68, 0), (-68, 0),
                      (0, 132), (-34, 140), (34, 140), (0, 176)):
         if not outer_water.any():
@@ -519,9 +524,38 @@ def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_
         cand = srcok[np.ix_(sy, sx)]
         use = outer_water & cand
         stg2[use] = refc[np.ix_(sy, sx)][use]
+        cloned = cloned | use
         outer_water = outer_water & ~use
-    stage = Image.fromarray(np.clip(stg2, 0, 255).astype('uint8'))
+    # 克隆块边界羽化（硬边阶梯=实测教训）
+    _cl = Image.fromarray((cloned * 255).astype('uint8')).filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(2.5))
+    _cm = np.asarray(_cl) > 120
+    _out = np.asarray(stage.convert('RGB')).copy()
+    _out[_cm] = np.clip(stg2, 0, 255).astype('uint8')[_cm]
+    stage = Image.fromarray(_out)
     _p('gray clone done')
+    # 水纹纹理传递：平坦供体水+REF 周围水的高频涟漪（实测：全图观感=水太“塑料”）。
+    # detail=(REF−blur(REF)) 仅在合法水面取，向 selw 水面加性迁移；幅度中位归一。
+    wtr = base & ~tube
+    refh = np.asarray(Image.open(REF).convert('RGB')).astype(np.float32)
+    det = refh - np.asarray(Image.fromarray(np.asarray(Image.open(REF).convert('RGB')))
+                            .filter(ImageFilter.GaussianBlur(6))).astype(np.float32)
+    det = np.asarray(Image.fromarray(np.clip(det + 128, 0, 255).astype('uint8'))
+                     .filter(ImageFilter.GaussianBlur(2))).astype(np.float32) - 128.0
+    dsrc = ~tube & ~(np.asarray(mask17.footprint(fish, margin=14)) > 127) & ~zz & ~finref
+    dsrcm = np.asarray(Image.fromarray((dsrc * 255).astype('uint8')).filter(ImageFilter.MaxFilter(3))) > 0
+    stgf = np.asarray(stage.convert('RGB')).astype(np.float32)
+    wtodo = wtr & ~finref
+    for (dx, dy) in ((0, 34), (-34, 20), (34, 20), (-48, -14), (48, -14), (0, -34),
+                     (68, 0), (-68, 0), (0, 132), (-34, 140), (34, 140), (0, 176)):
+        if not wtodo.any():
+            break
+        sy = np.clip(np.arange(REF_SIZE[1]) + dy, 0, REF_SIZE[1] - 1)
+        sx = np.clip(np.arange(REF_SIZE[0]) + dx, 0, REF_SIZE[0] - 1)
+        cand = dsrc[np.ix_(sy, sx)]
+        use = wtodo & cand
+        stgf[use] = np.clip(stgf[use] + det[np.ix_(sy, sx)][use] * 0.5, 0, 255)
+        wtodo = wtodo & ~use
+    stage = Image.fromarray(np.clip(stgf, 0, 255).astype('uint8'))
     stage = tube_fill(fish, base & tube, stage)
     _p('tube filled')
     stage = tube_row_med(fish, base & tube, stage)
