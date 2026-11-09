@@ -64,7 +64,7 @@ def check(fish, stage_path, name, zoom=2.4):
                                        a).filter(ImageFilter.MaxFilter(7))) > 0
     else:
         E = np.zeros_like(fb)
-    keep_ring = fb & ~E & ~_limb_on_tube
+    keep_ring = fb & ~E & ~_limb_on_tube & ~compose17.cut_alpha_mask(fish)   # 压圈鱼发丝=鱼像素非圈面
     vr = int((d[keep_ring] > 0).sum())
     print('%s: 前缘带(¬肢体)差异像素 = %d / %d (要求 0)' % (fish, vr, keep_ring.sum()))
     # ZZ 字标像素级保留断言（fish1）
@@ -72,6 +72,76 @@ def check(fish, stage_path, name, zoom=2.4):
         zz = np.asarray(mask17.zz_letters()) > 0
         vz = int((d[zz] > 0).sum())
         print('%s: ZZ 差异像素 = %d / %d (要求 0)' % (fish, vz, zz.sum()))
+    # 补底清晰度硬闸（用户裁决 2026-11-09 二轮）：补底区高频能量低于周边样张水面
+    # 即不过——涂抹糊块/灰绿补丁/白抹痕一律拦下。上版 unit17 为固化反例（须 FAIL）。
+    def _hp(arr):
+        a = (arr[:, :, 0] * 0.299 + arr[:, :, 1] * 0.587 + arr[:, :, 2] * 0.114)
+        bl = np.asarray(Image.fromarray(np.clip(a, 0, 255).astype('uint8'))
+                        .filter(ImageFilter.GaussianBlur(2))).astype(np.float32)
+        return a - bl
+    def _rms(hp, m):
+        v = hp[m]
+        return float(np.sqrt((v ** 2).mean()))
+    fillm = compose17.inpaint_base(fish) & ~(np.asarray(mask17.tube_band(fish)) > 0)
+    _uc = np.asarray(Image.fromarray(np.asarray(a).astype('uint8')).filter(ImageFilter.MaxFilter(9))) > 0
+    fillm = fillm & ~_uc          # 只测水面：角色本体高对比不计入
+    sur = np.asarray(Image.fromarray((fillm * 255).astype('uint8'))
+                     .filter(ImageFilter.MaxFilter(65))) > 0
+    sur = sur & ~fillm & ~(np.asarray(mask17.tube_band(fish)) > 0) \
+        & ~(np.asarray(mask17.footprint(fish, margin=14)) > 127)
+    if fish == 'fish1':
+        sur = sur & ~(np.asarray(mask17.zz_letters()) > 0)
+    hp_ref = _hp(ref.astype(np.float32))
+    hp_st = _hp(st.astype(np.float32))
+    hf_ref = _rms(hp_ref, sur)
+    r = _rms(hp_st, fillm) / max(hf_ref, 1e-6)
+    print('%s: 补底区清晰度比(全局) = %.2f (要求 ≥0.85)' % (fish, r))
+    # 局部糊斑检测：逐 20px 瓦片，高频能量低于其“周边样张水面环带”50% 即计糊斑块
+    # （基线=局部而非全局：平缓水区的干净克隆不应误伤）。
+    tsize = 20
+    Hf, Wf = fillm.shape
+    surr = np.asarray(Image.fromarray((fillm * 255).astype('uint8'))
+                      .filter(ImageFilter.MaxFilter(81))) > 0
+    surr = surr & ~fillm & ~(np.asarray(mask17.tube_band(fish)) > 0) & ~_uc
+    # 只测**被改动**的像素：按设计未动的样张原像素（圈缘影/保留水）不算糊斑候选，
+    # 改后瓦片覆盖 <30% 时跳过（避免半原样瓦片被均值拖低误判）。
+    changed = np.abs(st.astype(int) - ref.astype(int)).sum(2) > 24
+    deficit = ntot = 0
+    for by in range(0, Hf, tsize):
+        for bx in range(0, Wf, tsize):
+            t = fillm[by:by + tsize, bx:bx + tsize]
+            if t.sum() < 0.6 * t.size:
+                continue
+            tc = t & changed[by:by + tsize, bx:bx + tsize]
+            if tc.sum() < 0.3 * t.sum():
+                continue
+            med = np.median(ref[by:by + tsize, bx:bx + tsize].reshape(-1, 3), 0)
+            if (med[0] > 140 and med[0] - med[1] > 80 and med[2] < 100) or \
+               (med[0] > 190 and med[1] > 170 and med[2] > 170):
+                continue   # REF 中位=圈条纹：糊斑闸只管水面瓦片（条纹道另核）
+            _tR, _tG, _tB = st[by:by + tsize, bx:bx + tsize, 0].astype(int), st[by:by + tsize, bx:bx + tsize, 1].astype(int), st[by:by + tsize, bx:bx + tsize, 2].astype(int)
+            _st_st = ((_tR - _tG > 50) & (_tR - _tB > 60) & (_tR > 90)) | \
+                     ((_tR > 190) & (_tR - _tG > -18) & (_tR - _tG < 40) & (_tB > 140))
+            _nr = np.asarray(Image.fromarray((_st_st.astype('uint8') * 255))
+                             .filter(ImageFilter.MaxFilter(31))) > 0   # 管邻域
+            tc = tc & ~(_st_st & _nr)          # 圈条纹克隆像素不入水面糊斑统计
+            if tc.sum() < 0.3 * t.sum():
+                continue
+            ring_ = surr[by:by + tsize, bx:bx + tsize]
+            if ring_.sum() < 20:
+                continue
+            rv = hp_ref[by:by + tsize, bx:bx + tsize][ring_]
+            base = float(np.sqrt((rv ** 2).mean()))
+            v = hp_st[by:by + tsize, bx:bx + tsize][tc]
+            rr = float(np.sqrt((v ** 2).mean()))
+            ntot += 1
+            if rr < 0.5 * base:
+                deficit += 1
+                if os.environ.get('DBG1'):
+                    print('  tile y%d x%d rr=%.2f base=%.2f' % (by, bx, rr, base))
+    pct = 100.0 * deficit / max(ntot, 1)
+    print('%s: 糊斑瓦片 = %d / %d (%.1f%%，要求 ≤2%%；涂抹糊块/灰绿补丁/白抹痕不过)'
+          % (fish, deficit, ntot, pct))
     # 躯干覆盖硬闸（用户裁决 2026-11-09）：旧鱼躯干掩膜区（抠图α¬管带¬ZZ）
     # 必须被新角色像素完整覆盖——「圈里只剩头/鞋/底片补丁色」必须过不了闸。
     ox, oy = mask17.cut_origins()[fish]
@@ -97,6 +167,12 @@ def check(fish, stage_path, name, zoom=2.4):
         Rs, Gs, Bs = stg[:, :, 0], stg[:, :, 1], stg[:, :, 2]
         watery = ((Rs < 170) & ((Gs - Rs > 15) | (Bs - Rs > 5))) | \
             (stg.max(2) < 110)   # 深色水面阴影缝=中性暗，视作水
+        refg0 = np.asarray(Image.open(mask17.REF).convert('RGB')).astype(int)
+        watery = watery | (np.abs(stg - refg0).sum(2) <= 8)   # 样张原像素未动=合法(圈白/星芒)
+        _R, _G, _B = stg[:, :, 0], stg[:, :, 1], stg[:, :, 2]
+        stripe_st = ((_R > 140) & (_R - _G > 80) & (_B < 100)) | \
+                    ((_R > 190) & (_G > 170) & (_B > 170))     # 圈条纹克隆=合法(鱼鳍压圈处)
+        watery = watery | stripe_st
         unc2 = np.asarray(Image.fromarray((uncovered * 255).astype('uint8'))
                           .filter(ImageFilter.MinFilter(5))) > 0   # 去角色边缘 AA 环
         _td = np.asarray(Image.fromarray((np.asarray(mask17.tube_band(fish)) > 0)

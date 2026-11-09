@@ -21,6 +21,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageChops
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mask17
+import mask15
 import inp16                      # ComfyUI post/wait/out_of 经 gen16crop
 import gen16crop as G
 
@@ -379,6 +380,16 @@ def tube_fill(fish, sel, stage):
     return outb
 
 
+def cut_alpha_mask(fish, dil=7):
+    """抠图全轮廓（含墨镜/发/压圈发丝）贴回样张坐标系的布尔掩膜。"""
+    _cut = mask17.cut_rgba(fish).split()[3]
+    _ox, _oy = mask17.cut_origins()[fish]
+    shp = np.asarray(mask17.tube_band(fish)).shape
+    _big = Image.new('L', shp[::-1], 0)
+    _big.paste(_cut, (_ox, _oy))
+    return np.asarray(_big.filter(ImageFilter.MaxFilter(dil))) > 0
+
+
 def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_only=False):
     """① 两段 erase-inpaint（均 d1.0，无预填充——预填充实测要么留鱼鬼影要么死色平涂）：
        先海水段（足迹¬管带），后管体段（足迹∧管带，圈条带自然延续）。"""
@@ -387,188 +398,207 @@ def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_
     box = mask17.CROPS[fish]
     tube = np.asarray(_m.tube_band(fish)) > 0
     base = inpaint_base(fish)
-    if fish == 'fish1':
-        # 海水段=fish1 验收水(602 seed)平移裁剪贴回——模型 601/605/606/607 连开
-        # 肉块/木板/绿鱼/潜水艇，只有 602 干净（抽卡记录），此后固化为供体。
-        donp = '/mnt/g/workspace/comfyui/output/g17hole/g17in-fish1-602-water_00001_.png'
-        don = Image.open(donp).convert('RGB').resize((box[2] - box[0], box[3] - box[1]), Image.LANCZOS)
-        # 供体验收掩膜（602 实际补画过的区域）；鳍等供体未覆盖区走卷积兜底，
-        # 否则旧鱼鳍会随供体回植（实测教训）。
-        dmask = np.asarray(Image.open('/mnt/g/workspace/comfyui/input/g17in/g17in-fish1-602-water-mask.png').resize(
-            (box[2] - box[0], box[3] - box[1]), Image.LANCZOS)) > 128
-        selw = base & ~tube
-        okw = np.zeros_like(selw)
-        okw[box[1]:box[3], box[0]:box[2]] = dmask
-        okw = selw & okw
-        # 供体在水面上幻觉出的暖色鱼鳍（样张该处为纯水，实测 2776px）不取供体
-        refw = np.asarray(Image.open(REF).convert('RGB')).astype(int)
-        warm = (refw[:, :, 0] > 150) & (refw[:, :, 0] - refw[:, :, 2] > 40)
-        yy = np.arange(REF_SIZE[1])[:, None]
-        okw = okw & ~(warm & (yy > 1120) & ~tube)
-        rem = selw & ~okw
-        stg = np.asarray(stage.convert('RGB')).astype(np.float64)
-        # 兜底：水色多尺度扩散（权重=¬(足迹∪管体)）
-        wsrc = ((np.asarray(mask17.footprint(fish, margin=26)) > 127) | tube).astype(np.uint8) * 255
-        wa = 255.0 - np.asarray(Image.fromarray(wsrc).filter(ImageFilter.MaxFilter(3))).astype(np.float32)
-        wmt = Image.fromarray(wa.astype('uint8'))
-        fill = stg.copy()
-        for r in (15, 40, 100, 240):
-            den = np.asarray(wmt.filter(ImageFilter.GaussianBlur(r))).astype(np.float32)
-            okk = den > 30.0
-            den = np.maximum(den, 1.0)
-            for i in range(3):
-                num = np.asarray(Image.fromarray(np.clip(stg[:, :, i] * wa / 255.0, 0, 255).astype('uint8'))
-                                 .filter(ImageFilter.GaussianBlur(r))).astype(np.float32)
-                vv = np.clip(num * 255.0 / den, 0, 255)
-                fill[:, :, i] = np.where(okk, vv, fill[:, :, i])
-        stg[rem] = fill[rem]
-        stage = Image.fromarray(np.clip(stg, 0, 255).astype('uint8'))
-        m = Image.fromarray((okw * 255).astype('uint8')).filter(ImageFilter.GaussianBlur(4))
-        m = m.point(lambda v: 255 if v > 128 else (0 if v < 20 else v))
-        pm = m.crop(box).filter(ImageFilter.MinFilter(9)).filter(ImageFilter.GaussianBlur(2))
-        pm = pm.point(lambda v: 255 if v > 200 else (0 if v < 20 else v))
-        # 供体色调增益：selw 外环带（本图水色）/ 供体同位置水色
-        sd = Image.fromarray((selw * 255).astype('uint8')).filter(ImageFilter.MaxFilter(53))
-        ringpx = (np.asarray(sd) > 0) & ~selw & ~tube & ~warm
-        if ringpx.sum() > 400:
-            dres = np.asarray(don).astype(np.float64)
-            dm = np.full(REF_SIZE[::-1], np.nan).astype(np.float64)
-            dsub = np.asarray(Image.open(donp).convert('RGB').resize(
-                (box[2] - box[0], box[3] - box[1]), Image.LANCZOS)).astype(np.float64)
-            g = np.ones(3)
-            if ringpx[box[1]:box[3], box[0]:box[2]].sum() > 400:
-                rr = ringpx[box[1]:box[3], box[0]:box[2]]
-                tm = np.median(stg[box[1]:box[3], box[0]:box[2]][rr], axis=0)
-                dmm = np.median(dsub[rr], axis=0)
-                g = np.clip(tm / np.maximum(dmm, 1.0), 0.62, 1.42)
-                # 供体水去饱和(灰平)——按邻域水色对比度补饱和（实测教训）。
-                tsub = stg[box[1]:box[3], box[0]:box[2]][rr]
-                s1 = float(np.std(dsub[rr], axis=1).mean())
-                s2 = float(np.std(tsub, axis=1).mean())
-                k = float(np.clip(s2 / max(s1, 1e-3), 1.0, 1.8))
-                mu = dsub.mean(axis=2, keepdims=True)
-                dsub = mu + k * (dsub - mu)
-                print('water gain', np.round(g, 3), 'sat', round(k, 2), flush=True)
-            # 孔内局部校正：供体孔内水灰绿漂移，以孔缘 REF 水残月为局部目标（实测教训）。
-            holef = np.zeros(REF_SIZE[::-1], bool)
-            hx, hy, ha, hb = mask17.HOLE_ELL[fish]
-            yy0, xx0 = np.mgrid[0:REF_SIZE[1], 0:REF_SIZE[0]]
-            holef = ((xx0 - hx) / ha) ** 2 + ((yy0 - hy) / hb) ** 2 <= 1.0
-            cre = holef & ~selw & ~np.asarray(_m.zz_letters()) & ~warm
-            creb = cre[box[1]:box[3], box[0]:box[2]]
-            tcre = stg[box[1]:box[3], box[0]:box[2]][creb]
-            if creb.sum() > 200:
-                g2 = np.clip(np.median(tcre, axis=0) / np.maximum(np.median(dsub[creb], axis=0), 1.0), 0.75, 1.35)
-                s1 = float(np.std(dsub[creb], axis=1).mean())
-                s2 = float(np.std(tcre, axis=1).mean())
-                k2 = float(np.clip(s2 / max(s1, 1e-3), 1.0, 1.8))
-                hb2 = holef[box[1]:box[3], box[0]:box[2]]
-                mu2 = dsub[hb2].mean(axis=1, keepdims=True)
-                seg = mu2 + k2 * (dsub[hb2] - mu2)
-                dsub[hb2] = np.clip(seg * g2, 0, 255)
-                print('hole gain', np.round(g2, 3), 'sat', round(k2, 2), 'cres', int(creb.sum()), flush=True)
-            don = Image.fromarray(np.clip(dsub * g, 0, 255).astype('uint8'))
-        ob = stage.convert('RGB').copy()
-        ob.paste(don, (box[0], box[1]), pm)
-        stage = ob
-    else:
-        donor = stage_out_donors.get(fish, DONOR_WATER)
-        stage = water_copy_fill(fish, base & ~tube, stage, donor, WATER_OFFSET[fish])
-    _p('water pasted')
-    # 水面暖色残留清洗（皮肤/鱼鳍碎屑硬门槛）：sel∧¬管 区域中暖色像素
-    # 用周围水色替换——对三鱼通用。
-    stg = np.asarray(stage.convert('RGB')).astype(np.float64)
-    selw2 = base & ~tube
-    wmask = (stg[:, :, 0] > 150) & (stg[:, :, 1] > 60) & \
-        (stg[:, :, 0] - stg[:, :, 2] > 40) & selw2
-    # 孔缘旧鱼轮廓缝残片（非冷调=底片补丁色）并入清洗（用户硬口径：缝状补丁不过闸）。
-    ox1, oy1 = _m.cut_origins()[fish]
-    ca1 = np.asarray(_m.cut_rgba(fish).split()[3])
-    big1 = np.zeros(tube.shape, bool)
-    big1[oy1:oy1 + ca1.shape[0], ox1:ox1 + ca1.shape[1]] = ca1 > 127
-    oe = np.asarray(_m.open_ell(fish)) > 0
-    tube_d = np.asarray(Image.fromarray((tube * 255).astype('uint8')).filter(ImageFilter.MaxFilter(11))) > 0
-    crev = big1 & oe & ~tube & ~tube_d
-    if fish == 'fish1':
-        crev = crev & ~(np.asarray(_m.zz_letters()) > 0)
-    cool = (stg[:, :, 0] < 170) & ((stg[:, :, 1] - stg[:, :, 0] > 15) | (stg[:, :, 2] - stg[:, :, 0] > 5))
-    wmask = wmask | (crev & ~cool)
-    if wmask.any():
-        wa2 = ((~selw2 | tube) * 255).astype(np.uint8)
-        wa2 = 255.0 - np.asarray(Image.fromarray(wa2).filter(ImageFilter.MaxFilter(3))).astype(np.float32)
-        wmt2 = Image.fromarray(wa2.astype('uint8'))
-        fill2 = stg.copy()
-        for r in (15, 40, 100):
-            den = np.asarray(wmt2.filter(ImageFilter.GaussianBlur(r))).astype(np.float32)
-            okk = den > 30.0
-            den = np.maximum(den, 1.0)
-            for i in range(3):
-                num = np.asarray(Image.fromarray(np.clip(stg[:, :, i] * wa2 / 255.0, 0, 255).astype('uint8'))
-                                 .filter(ImageFilter.GaussianBlur(r))).astype(np.float32)
-                vv = np.clip(num * 255.0 / den, 0, 255)
-                fill2[:, :, i] = np.where(okk, vv, fill2[:, :, i])
-        stg[wmask] = fill2[wmask]
-        stage = Image.fromarray(np.clip(stg, 0, 255).astype('uint8'))
-    _p('warm cleaned')
-    # 区域水分治：孔内水=供体+孔缘色调；圈外水=REF 平移克隆（圈下涟漪水自相似，
-    # 供体模型水灰平——实测教训）。多偏移择首个合法源，兜底=既有卷积填充。
-    hole = np.asarray(_m.hole_mask(fish)) > 0
-    stg2 = np.asarray(stage.convert('RGB')).astype(np.float64)
-    refc = np.asarray(Image.open(REF).convert('RGB')).astype(np.float64)
-    Rr2, Gg2, Bb2 = refc[:, :, 0], refc[:, :, 1], refc[:, :, 2]
-    zz = np.asarray(_m.zz_letters()) > 0 if fish == 'fish1' else np.zeros_like(tube)
+    # 水与背景一律禁模型补底（用户裁决 2026-11-09 二轮）：模型 inpaint=低频糊块
+    # （灰绿块/白抹痕/圈外灰雾同症状），达不到样张清晰度。擦除空缺=样张自身干净
+    # 水面「平移复制克隆」：涟漪方向连续的竖直偏移优先、光斑密度天然一致、边界无缝羽化。
+    refimg = Image.open(REF).convert('RGB')
+    refc = np.asarray(refimg).astype(np.int16)
+    stg = np.asarray(stage.convert('RGB')).astype(np.int16)
+    # 最小补底域：样张里**鱼实际盖住**的像素（非水相，或暗相=鳍/深影）+5px 膨胀。
+    # 圈外水、圈缘影、孔内鱼旁水面一律保留样张原像素——最彻底的水连续性。
+    W = base & ~tube                                       # 全部非管面空缺
     finref = (refc[:, :, 0] > 150) & (refc[:, :, 1] > 100) & (refc[:, :, 0] - refc[:, :, 2] > 50)
-    srcok = ~tube & ~base & ~zz & ~finref
-    mx = stg2.max(-1); mn = stg2.min(-1)
-    grayflat = (mx - mn < 26) & (stg2.mean(-1) > 90) & (stg2.mean(-1) < 195)
-    # 灰平残余（含 fish2/3 孔内 conv 灰斑）→ REF 平移克隆。fish1 孔内水保留供体
-    # （REF 平移实测：浅=平淡、深=暗影池，皆不贴样张光照）。
-    outer_water = base & ~tube & grayflat
-    if fish == 'fish1':
-        outer_water = outer_water & ~hole
-    cloned = np.zeros_like(tube)
-    for (dx, dy) in ((0, 34), (-34, 20), (34, 20), (-48, -14), (48, -14), (0, -34), (68, 0), (-68, 0),
-                     (0, 132), (-34, 140), (34, 140), (0, 176)):
-        if not outer_water.any():
+    zz = np.asarray(_m.zz_letters()) > 0 if fish == 'fish1' else np.zeros_like(tube)
+    tubeE = np.asarray(Image.fromarray((tube * 255).astype('uint8'))
+                       .filter(ImageFilter.MaxFilter(13))) > 0   # 圈缘红白晕不作源
+    srcok = ~tubeE & ~(np.asarray(mask17.footprint(fish, margin=14)) > 127) & ~zz & ~finref
+    # 样张「水相」掩膜：仅用于选择「周边水面」参考带（源有效性用 srccool 冷调口径）。
+    rmax = refc.max(2).astype(int); rmin = refc.min(2).astype(int)
+    waterph = ~tubeE & ~zz & (rmax < 252) & (rmax - rmin < 95) & \
+        ~((refc[:, :, 0] > 150) & (refc[:, :, 0] - refc[:, :, 2] > 55))
+    srccool = srcok & (refc[:, :, 0] - refc[:, :, 2] < 20)       # 样张水主色(含白亮涟漪/星芒)
+    # 「干净水面」硬矩形：样张左侧/中部开阔水区。别的泳者(蓝白圈/果汁)、暗鱼、
+    # 星芒都冷调、会被 srccool 误收为“水”→克隆出块状异体内容（实测教训）。
+    clean = np.zeros(tube.shape, dtype=bool)
+    clean[150:780, 60:1420] = True      # 上方开阔水
+    clean[150:1420, 60:420] = True      # 左侧水带（200px 环带需要近处取源）
+    clean[1330:1560, 560:1050] = True   # 下中带（暗鱼影由 fshad 排除）
+    cy, cx, cha, chb = 235, 458, 110, 75                       # 星芒强闪排除
+    yy0, xx0 = np.mgrid[0:tube.shape[0], 0:tube.shape[1]]
+    clean &= ~(((yy0 - cy) / chb) ** 2 + ((xx0 - cx) / cha) ** 2 <= 1.0)
+    srccoolc = srccool & clean
+    # 最小补底域=实测旧鱼多边形+4px（mask15 标定）。圈外水/圈缘影/孔内鱼旁水面
+    # 一律保留样张原像素——最彻底的水连续；色相启发式会漏鱼裤(水相色)不可用。
+    tube9 = np.asarray(Image.fromarray((tube * 255).astype('uint8'))
+                       .filter(ImageFilter.MaxFilter(9))) > 0   # 圈可见像素不可刷没（右缘实测）
+    tube5 = np.asarray(Image.fromarray((tube * 255).astype('uint8'))
+                       .filter(ImageFilter.MaxFilter(5))) > 0
+    _cutm = cut_alpha_mask(fish)                 # 抠图全轮廓(含墨镜/发/压圈发丝)
+    zz3 = np.asarray(Image.fromarray((zz * 255).astype('uint8'))
+                     .filter(ImageFilter.MaxFilter(7))) > 0 if fish == 'fish1' else np.zeros_like(tube)
+    W = ((np.asarray(mask15.fish_mask(fish, margin=4)) > 127) | _cutm) & (base | _cutm) \
+        & ~tube & ~zz3    # 仅护管面核心；5px 领圈鱼色像素须擦(tube5 护领=黄弧实测教训)
+    # 圈条纹像素（鱼鳍/发压在管面上处）= 独立克隆道（水克隆刷圈=条码感根因，实测）：
+    # 源=样张自身管面条纹，沿角向小偏移平移复制；残差交管体极坐标填色兜底。
+    _Rr, _Gg, _Bb = refc[:, :, 0], refc[:, :, 1], refc[:, :, 2]
+    _redst = (_Rr - _Gg > 50) & (_Rr - _Bb > 60) & (_Rr > 90)
+    _whst = (_Rr > 190) & (_Rr - _Gg > -18) & (_Rr - _Gg < 40) & (_Bb > 140)
+    tube15 = np.asarray(Image.fromarray((tube * 255).astype('uint8'))
+                        .filter(ImageFilter.MaxFilter(31))) > 0
+    # 白圈白与眼白同色相——仅管带邻域的白算圈白（眼白在管内上方,实测教训）。
+    refstripe = _redst | (_whst & tube15)
+    _ringzone = np.asarray(Image.fromarray((tube * 255).astype('uint8'))
+                           .filter(ImageFilter.MaxFilter(27))) > 0    # 管+13px：内缘 AA/领圈带
+    _nonwat = ~(((refc[:, :, 1] - refc[:, :, 0] > 12) & (refc.max(2) < 225)) |
+                (refc.max(2) < 110))     # REF 非水相(圈色/AA/压圈鱼体)
+    ringW = ((np.asarray(mask15.fish_mask(fish, margin=4)) > 127) | _cutm) & ~zz3 & ~tube & \
+        _ringzone & _nonwat              # 几何判据(色相判据漏 AA 半像素,实测)
+    W = W & ~ringW
+
+    HH, WW = tube.shape
+
+    def _shift(a, dx, dy):
+        sy = np.clip(np.arange(HH) + dy, 0, HH - 1)
+        sx = np.clip(np.arange(WW) + dx, 0, WW - 1)
+        return a[np.ix_(sy, sx)]
+
+    def _ix(o):
+        sy = np.clip(np.arange(HH) + o[1], 0, HH - 1)
+        sx = np.clip(np.arange(WW) + o[0], 0, WW - 1)
+        return np.ix_(sy, sx)
+
+    def _clone(todo, oksrc, offs_):
+        r2 = todo.copy()
+        for (dx, dy) in offs_:
+            if not r2.any():
+                break
+            use = r2 & (_shift(oksrc.astype(np.uint8), dx, dy) > 0)
+            if use.any():
+                stg[use] = refc[_ix((dx, dy))][use]
+                r2 = r2 & ~use
+        return r2
+
+    def _dil(a, k):
+        return np.asarray(Image.fromarray((a * 255).astype('uint8'))
+                          .filter(ImageFilter.MaxFilter(2 * k + 1))) > 0
+
+    # R3v2（用户裁决 2026-11-09 issue #35 三条口径）：水补全收口——
+    # ① 取源=擦除域周边 200px 近处干净水面（无圈体、无鱼影、无气泡、无角色；
+    #    禁止远端天际线取源——上下光照渐变不同必出色差）；
+    # ② 平移偏移只做一次全局均值匹配（对目标域四周 24px 环带均值），禁逐块匹配；
+    # ③ 贴入后边界仅 1px 羽化；④ 水过关后才贴人物（顺序=region 四步天然保证）。
+    fp26 = (np.asarray(mask17.footprint(fish, margin=26)) > 127)   # margin10 源近=灰杂点增多(实测回滚)
+    bubble = (refc.min(2) > 218)                     # 仅纯白气泡核；涟漪亮痕保留（纹理一致）
+    _sat = refc[:, :, 1] - refc[:, :, 0]
+    fshad = (refc.max(2) < 110) | ((_sat < 25) & (refc.max(2) < 170))
+    # 排除=深暗鱼体 与 低饱和暗影痕；饱和暗水(圈影 G−R 大)可作暗区源（底色带实测）。
+    cleanband = srccool & clean & ~fp26 & ~bubble & ~fshad \
+        & _dil(W, 200) & ~_dil(W, 0)
+    # 圈条纹像素（鱼鳍/发压在管面处）：沿角向小偏移复制样张自身条纹；残差极坐标兜底。
+    srcstripe = refstripe & tubeE & ~zz & ~finref
+    offsR = tuple((dx, dy) for dx in (0, 2, -2, 4, -4, 6, -6, 8, -8, 10, -10, 12, -12)
+                  for dy in (0, 2, -2, 4, -4))          # 条纹相位保真：偏移≤12（红梳齿=大偏移实测）
+    ringres = _clone(ringW, srcstripe, offsR)
+    k = 0
+    while ringres.any() and k < 300:                     # 最近邻条纹链（不极坐标，避免弧线外溢）
+        moved = False
+        for dy_, dx_ in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+            src_ok = _shift(srcstripe.astype(np.uint8), dx_, dy_) > 0
+            from_ok = np.roll(ringW & ~ringres, (-dy_, -dx_), axis=(0, 1))
+            u2 = ringres & src_ok & from_ok
+            if u2.any():
+                stg[u2] = refc[_ix((dx_, dy_))][u2]
+                ringres = ringres & ~u2
+                moved = True
+        k += 1
+        if not moved:
             break
-        sy = np.clip(np.arange(stg2.shape[0]) + dy, 0, stg2.shape[0] - 1)
-        sx = np.clip(np.arange(stg2.shape[1]) + dx, 0, stg2.shape[1] - 1)
-        cand = srcok[np.ix_(sy, sx)]
-        use = outer_water & cand
-        stg2[use] = refc[np.ix_(sy, sx)][use]
-        cloned = cloned | use
-        outer_water = outer_water & ~use
-    # 克隆块边界羽化（硬边阶梯=实测教训）
-    _cl = Image.fromarray((cloned * 255).astype('uint8')).filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(2.5))
-    _cm = np.asarray(_cl) > 120
-    _out = np.asarray(stage.convert('RGB')).copy()
-    _out[_cm] = np.clip(stg2, 0, 255).astype('uint8')[_cm]
+    if os.environ.get('DEBUG17'):
+        print('ring clone px:', int((ringW & ~ringres).sum()), 'residual:', int(ringres.sum()), flush=True)
+    W = W | ringres        # 条纹残差回水车道（留在原地=REF 鱼黄弧/紫唇残留，实测教训）
+
+
+    def _fillzone(Wz):
+        W = Wz
+        nonlocal stg
+        ringb = _dil(W, 24) & ~W & ~tubeE & ~zz & ~fp26 & ~fshad
+        tmr = refc[ringb].mean(0) if ringb.sum() >= 64 else refc[_dil(W, 0)].mean(0)
+        _dyv = (4, 8, 16, 34, 60, 90, 132, 176, 220, 260)
+        offs = tuple((dx, s * dy) for dy in _dyv for s in (-1, 1)
+                     for dx in (-8, -4, 0, 4, 8)) + \
+            tuple((s * dx, dy) for dx in (34, 68, 100, 140, 180, 220, 260) for s in (-1, 1)
+                  for dy in (-16, -8, 0, 8, 16))
+        nw = max(int(W.sum()), 1)
+        # 光斑密度基准（一轮裁决①「对齐光斑密度」）：环带水 vs 候选源高频能量
+        _lgr = np.asarray(Image.open(REF).convert('L')).astype(np.float32)
+        _hpr = _lgr - np.asarray(Image.fromarray(np.clip(_lgr, 0, 255).astype('uint8'))
+                                 .filter(ImageFilter.GaussianBlur(2))).astype(np.float32)
+        thf = float(np.sqrt((_hpr[ringb] ** 2).mean()))
+        bs, best = 1e18, None
+        for o in offs:
+            vm = (_shift(cleanband.astype(np.uint8), *o) > 0) & W
+            cov = float(vm.sum()) / nw
+            if cov < 0.30:
+                continue
+            sm = refc[_ix(o)][vm].mean(0)
+            shf = float(np.sqrt((_hpr[vm] ** 2).mean()))
+            s = float(np.abs(sm - tmr).mean()) + 0.004 * (abs(o[0]) + abs(o[1])) \
+                + 40.0 * (1 - cov) + 0.8 * abs(shf - thf)   # 光斑密度权重需小(实测:3.0→5/11 更差)
+            if s < bs:
+                bs, best = s, o
+        print('global off =', best, 'score=%.2f' % bs, flush=True)
+        if best is not None:
+            valid = (_shift(cleanband.astype(np.uint8), *best) > 0) & W
+            stg[valid] = refc[_ix(best)][valid]
+        rem = W & ~valid if best is not None else W.copy()
+        # 全局偏移无效像素（源落圈体上）：沿**同一方向**取近处干净水（k 缩放），
+        # 不做逐块配色；仍无效才进最近邻链（糊带=4-connected 蔓延实测）。
+        if best is not None and rem.any():
+            for kf in (0.15, 0.2, 0.25, 0.35, 0.5, 0.7, 0.85, 1.2, 1.5, 2.0, 3.0):
+                if not rem.any():
+                    break
+                ok_ = (round(best[0] * kf), round(best[1] * kf))
+                vk = (_shift(cleanband.astype(np.uint8), *ok_) > 0) & rem
+                if vk.any():
+                    stg[vk] = refc[_ix(ok_)][vk]
+                    rem = rem & ~vk
+        if rem.any():
+            rem = _clone(rem, srcok, offs)   # 最后兜底：全域有效 REF 平移（少量孤立像素）
+        k = 0
+        while rem.any() and k < 400:
+            filled_m = W & ~rem
+            k += 1
+            for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+                use = rem & np.roll(filled_m, (-dy, -dx), axis=(0, 1))
+                if use.any():
+                    stg[use] = np.roll(stg, (-dy, -dx), axis=(0, 1))[use]
+                    filled_m = filled_m | use
+                    rem = W & ~filled_m
+            if k > 300 and rem.sum() == getattr(_dil, '_prev', -1):
+                break
+            _dil._prev = rem.sum()
+        if rem.any():
+            print('water rem after chain:', int(rem.sum()), flush=True)
+
+
+    _holeD = np.asarray(mask17.hole_mask(fish, grow=25)) > 0
+    _cyh = mask17.HOLE_ELL[fish][1]
+    _yy0 = np.arange(tube.shape[0])[:, None]
+    _Wbot = W & ~_holeD & (_yy0 > _cyh)          # 圈下影水（暗区）
+    W = W & ~_Wbot                               # 其余（孔内+圈上）先补
+    _fillzone(W)
+    W = W | _Wbot
+    _fillzone(_Wbot)                             # 影水单独全局平移（亮度=自身周边环带匹配）
+    Wfull = (W | ringW).copy()
+    # 边界仅 1px 羽化（裁决口径）：收缩 1px + 0.6σ 微羽化合成回 REF。
+    _fm = Image.fromarray((Wfull * 255).astype('uint8')).filter(ImageFilter.MinFilter(3)) \
+              .filter(ImageFilter.GaussianBlur(0.6))
+    _fmm = np.asarray(_fm) > 100
+    _out = np.asarray(refimg).copy()
+    _out[_fmm] = np.clip(stg, 0, 255).astype('uint8')[_fmm]
     stage = Image.fromarray(_out)
-    _p('gray clone done')
-    # 水纹纹理传递：平坦供体水+REF 周围水的高频涟漪（实测：全图观感=水太“塑料”）。
-    # detail=(REF−blur(REF)) 仅在合法水面取，向 selw 水面加性迁移；幅度中位归一。
-    wtr = base & ~tube
-    refh = np.asarray(Image.open(REF).convert('RGB')).astype(np.float32)
-    det = refh - np.asarray(Image.fromarray(np.asarray(Image.open(REF).convert('RGB')))
-                            .filter(ImageFilter.GaussianBlur(6))).astype(np.float32)
-    det = np.asarray(Image.fromarray(np.clip(det + 128, 0, 255).astype('uint8'))
-                     .filter(ImageFilter.GaussianBlur(2))).astype(np.float32) - 128.0
-    dsrc = ~tube & ~(np.asarray(mask17.footprint(fish, margin=14)) > 127) & ~zz & ~finref
-    dsrcm = np.asarray(Image.fromarray((dsrc * 255).astype('uint8')).filter(ImageFilter.MaxFilter(3))) > 0
-    stgf = np.asarray(stage.convert('RGB')).astype(np.float32)
-    wtodo = wtr & ~finref
-    for (dx, dy) in ((0, 34), (-34, 20), (34, 20), (-48, -14), (48, -14), (0, -34),
-                     (68, 0), (-68, 0), (0, 132), (-34, 140), (34, 140), (0, 176)):
-        if not wtodo.any():
-            break
-        sy = np.clip(np.arange(REF_SIZE[1]) + dy, 0, REF_SIZE[1] - 1)
-        sx = np.clip(np.arange(REF_SIZE[0]) + dx, 0, REF_SIZE[0] - 1)
-        cand = dsrc[np.ix_(sy, sx)]
-        use = wtodo & cand
-        stgf[use] = np.clip(stgf[use] + det[np.ix_(sy, sx)][use] * 0.5, 0, 255)
-        wtodo = wtodo & ~use
-    stage = Image.fromarray(np.clip(stgf, 0, 255).astype('uint8'))
-    stage = tube_fill(fish, base & tube, stage)
+    _p('water clone-filled')
+    stage = tube_fill(fish, (base & tube) | (ringres & tube9), stage)
     _p('tube filled')
     stage = tube_row_med(fish, base & tube, stage)
     dst = stage_out or 'output/stage17-%s-inp.png' % fish
@@ -587,6 +617,9 @@ def _unit_layer(fish, p):
     s = cfg['s']
     Wu, Hu = max(1, int(round(w * s))), max(1, int(round(h * s)))
     u = unit.resize((Wu, Hu), Image.LANCZOS).rotate(-cfg['tilt'], expand=True, resample=Image.BICUBIC)
+    # 裁决④：单元贴入前 alpha 边缘收缩 1px 再 0.6 羽化（消白晕）。
+    _al = u.split()[3].filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(0.6))
+    u = Image.merge('RGBA', list(u.split()[:3]) + [_al])
     # bbox（旋转后）对齐 anchor
     bb = u.split()[3].getbbox()
     u = u.crop(bb)
