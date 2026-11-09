@@ -45,6 +45,11 @@ POSE = {
 
 WARM = (255, 214, 178)
 
+WATER_CFG = 3.0   # 高 cfg 强化文本先验=必画主体（少女/绿鱼/木板实测），低 cfg 取均值纹理
+DONOR_WATER = 'output/g17-fish1-inp.png'   # fish1 水段(d1.0 验收)供体，运行序保证先跑
+WATER_OFFSET = {'fish2': (412, -200), 'fish3': (378, 266)}   # 外环心 OUTER_ELL 实测位移
+stage_out_donors = {}
+
 INPAINT_TXT = {
   'w': ('calm open teal sea surface with soft ripples and gentle current shading, seamless continuation '
         'of the surrounding water, subtle darker depth shading, no objects, no horizon, no sky',
@@ -119,7 +124,7 @@ def _inpaint_pass(fish, seed, tag, base_bin, stage, crop_box, upscale):
       '8': {'class_type': 'InpaintModelConditioning', 'inputs': {'positive': ['4', 0], 'negative': ['5', 0],
               'vae': ['1', 2], 'pixels': ['6', 0], 'mask': ['7b', 0], 'noise_mask': True}},
       '10': {'class_type': 'KSampler', 'inputs': {'model': ['1', 0], 'positive': ['8', 0], 'negative': ['8', 1],
-               'latent_image': ['8', 2], 'seed': int(seed), 'steps': 30, 'cfg': 5.5,
+               'latent_image': ['8', 2], 'seed': int(seed), 'steps': 30, 'cfg': WATER_CFG,
                'sampler_name': 'dpmpp_2m', 'karras': True, 'denoise': DEN,
                'scheduler': 'karras'}},
       '11': {'class_type': 'VAEDecode', 'inputs': {'samples': ['10', 0], 'vae': ['1', 2]}},
@@ -137,6 +142,73 @@ def _inpaint_pass(fish, seed, tag, base_bin, stage, crop_box, upscale):
     out = stage.convert('RGB').copy()
     out.paste(im, (x0, y0), pm)
     return out
+
+
+def water_copy_fill(fish, sel, stage, donor_path, offset):
+    """海水段=同画平移克隆：以 fish1 已验收海水图为唯一纹理源（同一支笔的水），
+    平移到本圈位置、色调增益匹配本地水面、掩膜羽化贴回。
+    模型 d1.0 在大面积水域必产 hallucination（动漫少女/木板/小圈——511/521/605 实测），弃用。"""
+    import mask17 as _m
+    don = np.asarray(Image.open(donor_path).convert('RGB')).astype(np.float64)
+    stg = np.asarray(stage.convert('RGB')).astype(np.float64)
+    ox, oy = offset
+    donor = np.roll(np.roll(don, oy, axis=0), ox, axis=1)
+    # 供体失效区 = fish1 管体∪ZZ 平移后（黄字/管纹不可作海水）
+    t1 = np.asarray(_m.tube_band('fish1')) > 0
+    z1 = np.asarray(_m.zz_letters()) > 0
+    inv = np.roll(np.roll(t1 | z1, oy, axis=0), ox, axis=1)
+    ok = sel & ~inv
+    # 色调增益：sel 外环带（1x，距 sel≤24 的水面像素）
+    sd = Image.fromarray((sel * 255).astype('uint8')).filter(ImageFilter.MaxFilter(49))
+    near = (np.asarray(sd) > 0) & ~sel & ~t1 if False else (np.asarray(sd) > 0) & ~sel
+    t1s = np.roll(np.roll(t1, oy, axis=0), ox, axis=1)
+    near = near & ~t1s
+    g = np.ones(3)
+    if near.sum() > 500:
+        tm = np.median(stg[near], axis=0)
+        dm = np.median(donor[near], axis=0)
+        g = np.clip(tm / np.maximum(dm, 1.0), 0.8, 1.25)
+    out = stg.copy()
+    out[ok] = np.clip(donor[ok] * g, 0, 255)
+    # 残余 sel∧inv：多尺度归一化卷积兜底（周边水色扩散）
+    rem = sel & ~ok
+    if rem.any():
+        barr = out
+        wa = 255.0 - np.asarray(Image.fromarray((sel * 255).astype('uint8')).filter(ImageFilter.MaxFilter(3))).astype(np.float32)
+        wmt = Image.fromarray(wa.astype('uint8'))
+        fill = barr.copy()
+        for r in (15, 40, 100, 240):
+            den = np.asarray(wmt.filter(ImageFilter.GaussianBlur(r))).astype(np.float32)
+            okk = den > 30.0
+            den = np.maximum(den, 1.0)
+            for i in range(3):
+                num = np.asarray(Image.fromarray(np.clip(barr[:, :, i] * wa / 255.0, 0, 255).astype('uint8'))
+                                 .filter(ImageFilter.GaussianBlur(r))).astype(np.float32)
+                v = np.clip(num * 255.0 / den, 0, 255)
+                fill[:, :, i] = np.where(okk, v, fill[:, :, i])
+        out[rem] = fill[rem]
+    fim = Image.fromarray(out.astype('uint8'))
+    mh = Image.fromarray((sel * 255).astype('uint8')).filter(ImageFilter.GaussianBlur(2.5))
+    ob = stage.convert('RGB').copy()
+    ob.paste(fim, (0, 0), mh)
+    return ob
+
+
+def inpaint_base(fish):
+    """补画基础域：足迹(¬前缘|压管肢体) ∪ 抠图α∧¬前缘（鱼鳍越出足迹，实测教训）∧¬ZZ。"""
+    import mask17 as _m
+    fp = np.asarray(_m.footprint(fish, margin=14)) > 127
+    fb = np.asarray(_m.front_band(fish)) > 0
+    limbs = np.asarray(_m.old_limbs(fish, dil=4)) > 0
+    base = fp & (~fb | limbs)
+    ox, oy = _m.cut_origins()[fish]
+    ca = Image.new('L', REF_SIZE, 0)
+    ca.paste(_m.cut_rgba(fish).split()[3], (ox, oy))
+    add = (np.asarray(ca.filter(ImageFilter.MaxFilter(9))) > 60) & ~fb
+    base = base | add
+    if fish == 'fish1':
+        base = base & ~(np.asarray(_m.zz_letters()) > 0)
+    return base
 
 
 def tube_fill(fish, sel, stage):
@@ -162,14 +234,18 @@ def tube_fill(fish, sel, stage):
     disc = np.maximum(B * B - 4 * A * C, 0.0)
     rho_h = (-B + np.sqrt(disc)) / (2 * A)      # 外心在孔内，取正根=前向交点
     v = (rho - rho_h) / np.maximum(1.0 - rho_h, 1e-3)
-    NB, NV = 240, 10
+    NB, NV = 240, 20
     ub = np.clip((phi / (2 * np.pi) * NB).astype(int), 0, NB - 1)
     vb = np.clip((v * NV).astype(int), 0, NV - 1)
-    # 可见管面 = 管带 ∧ ¬旧鱼本体足迹(margin0，膨胀2px去AA) ∧ ¬ZZ。
-    # 注意：ringcut 抠图 α 含圈骨架，直接当遮挡会连管面一起排除（实测仅剩 2k px）。
-    body = np.asarray(_m.footprint(fish, margin=0)) > 127
-    cad = np.asarray(Image.fromarray((body * 255).astype('uint8')).filter(ImageFilter.MaxFilter(5))) > 60
-    vis = tube & ~cad & ~zz
+    # 可见管面 = 管带 ∧ ¬ZZ——遮挡体不可几何确定（ringcut α 含整圈：fish2 实测
+    # 肢体∧管=全部管；足迹 margin0 也吞圈），改由统计法剔除鱼染箱（下方离群判定）。
+    vis = tube & ~zz
+    if fish == 'fish1':
+        # 黄/橙鱼鳍染色像素不进分箱源（红条带 G<90、白面 B>150，不误伤）——
+        # 仅用于 bin 清洗，非圈保护掩膜（issue① 禁的是 chroma 保圈掩膜如 G16 zz_keep）。
+        arr0 = np.asarray(stage).astype(int)
+        fin = (arr0[:, :, 0] > 160) & (arr0[:, :, 1] > 130) & (arr0[:, :, 2] < 120)
+        vis = vis & ~fin
     arr = np.asarray(stage).astype(np.float64)
     cells = np.full((NB, NV, 3), np.nan)
     idx = ub[vis] * NV + vb[vis]
@@ -182,6 +258,20 @@ def tube_fill(fish, sel, stage):
         cells[idx_s[lo] // NV, idx_s[lo] % NV] = np.median(g, axis=0)
     # 空格填充：波前最近邻复制（φ 环形优先同 v 行，其次 v±1 列）——
     # 加权平均会把红白条纹混成灰紫（实测），最近邻保证条纹按角向干净延续。
+    # 离群剔除：鱼身覆盖箱的中位色与同 v 行角向邻域(±1,±2)差距>180(Σ3通道)则弃；
+    # 邻域用双侧取小，条纹跨界不误杀。两轮迭代（先清明显鱼染，再清残余）。
+    for _ in range(2):
+        filled0 = ~np.isnan(cells[:, :, 0])
+        far = np.full((NB, NV), 1e9)
+        for k in (-2, -1, 1, 2):
+            r = np.roll(cells, k, axis=0)
+            r2 = np.roll(cells, 2 * k, axis=0)
+            pair = np.fmin(np.abs(cells - r), np.abs(cells - r2)).sum(-1)
+            far = np.minimum(far, pair)
+        bad = filled0 & (np.nan_to_num(far, nan=0.0) < 1e9) & (np.nan_to_num(far) > 180)
+        if not bad.any():
+            break
+        cells[bad] = np.nan
     filled = ~np.isnan(cells[:, :, 0])
     for _ in range(NB + NV):
         if filled.all():
@@ -209,6 +299,8 @@ def tube_fill(fish, sel, stage):
     tgt = sel & tube
     out = np.asarray(stage).copy()
     out[tgt] = np.clip(fillimg[tgt], 0, 255).astype('uint8')
+    sm = np.asarray(Image.fromarray(out).filter(ImageFilter.GaussianBlur(1.5)))
+    out[tgt] = sm[tgt]
     im = Image.fromarray(out)
     mh = Image.fromarray((sel * 255).astype('uint8')).filter(ImageFilter.GaussianBlur(2))
     outb = stage.convert('RGB').copy()
@@ -222,14 +314,69 @@ def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_
     import mask17 as _m
     stage = Image.open(stage_in) if stage_in else Image.open(REF).convert('RGB')
     box = mask17.CROPS[fish]
-    fp = np.asarray(_m.footprint(fish, margin=14)) > 127
-    fb = np.asarray(_m.front_band(fish)) > 0
-    limbs = np.asarray(_m.old_limbs(fish, dil=4)) > 0
     tube = np.asarray(_m.tube_band(fish)) > 0
-    base = fp & (~fb | limbs)
+    base = inpaint_base(fish)
     if fish == 'fish1':
-        base = base & ~(np.asarray(_m.zz_letters()) > 0)
-    stage = _inpaint_pass(fish, seed, 'water', base & ~tube, stage, box, upscale)
+        # 海水段=fish1 验收水(602 seed)平移裁剪贴回——模型 601/605/606/607 连开
+        # 肉块/木板/绿鱼/潜水艇，只有 602 干净（抽卡记录），此后固化为供体。
+        donp = '/mnt/g/workspace/comfyui/output/g17hole/g17in-fish1-602-water_00001_.png'
+        don = Image.open(donp).convert('RGB').resize((box[2] - box[0], box[3] - box[1]), Image.LANCZOS)
+        # 供体验收掩膜（602 实际补画过的区域）；鳍等供体未覆盖区走卷积兜底，
+        # 否则旧鱼鳍会随供体回植（实测教训）。
+        dmask = np.asarray(Image.open('/mnt/g/workspace/comfyui/input/g17in/g17in-fish1-602-water-mask.png').resize(
+            (box[2] - box[0], box[3] - box[1]), Image.LANCZOS)) > 128
+        selw = base & ~tube
+        okw = np.zeros_like(selw)
+        okw[box[1]:box[3], box[0]:box[2]] = dmask
+        okw = selw & okw
+        # 供体在水面上幻觉出的暖色鱼鳍（样张该处为纯水，实测 2776px）不取供体
+        refw = np.asarray(Image.open(REF).convert('RGB')).astype(int)
+        warm = (refw[:, :, 0] > 150) & (refw[:, :, 0] - refw[:, :, 2] > 40)
+        yy = np.arange(REF_SIZE[1])[:, None]
+        okw = okw & ~(warm & (yy > 1120) & ~tube)
+        rem = selw & ~okw
+        stg = np.asarray(stage.convert('RGB')).astype(np.float64)
+        # 兜底：水色多尺度扩散（权重=¬(足迹∪管体)）
+        wsrc = ((np.asarray(mask17.footprint(fish, margin=26)) > 127) | tube).astype(np.uint8) * 255
+        wa = 255.0 - np.asarray(Image.fromarray(wsrc).filter(ImageFilter.MaxFilter(3))).astype(np.float32)
+        wmt = Image.fromarray(wa.astype('uint8'))
+        fill = stg.copy()
+        for r in (15, 40, 100, 240):
+            den = np.asarray(wmt.filter(ImageFilter.GaussianBlur(r))).astype(np.float32)
+            okk = den > 30.0
+            den = np.maximum(den, 1.0)
+            for i in range(3):
+                num = np.asarray(Image.fromarray(np.clip(stg[:, :, i] * wa / 255.0, 0, 255).astype('uint8'))
+                                 .filter(ImageFilter.GaussianBlur(r))).astype(np.float32)
+                vv = np.clip(num * 255.0 / den, 0, 255)
+                fill[:, :, i] = np.where(okk, vv, fill[:, :, i])
+        stg[rem] = fill[rem]
+        stage = Image.fromarray(np.clip(stg, 0, 255).astype('uint8'))
+        m = Image.fromarray((okw * 255).astype('uint8')).filter(ImageFilter.GaussianBlur(4))
+        m = m.point(lambda v: 255 if v > 128 else (0 if v < 20 else v))
+        pm = m.crop(box).filter(ImageFilter.MinFilter(9)).filter(ImageFilter.GaussianBlur(2))
+        pm = pm.point(lambda v: 255 if v > 200 else (0 if v < 20 else v))
+        # 供体色调增益：selw 外环带（本图水色）/ 供体同位置水色
+        sd = Image.fromarray((selw * 255).astype('uint8')).filter(ImageFilter.MaxFilter(53))
+        ringpx = (np.asarray(sd) > 0) & ~selw & ~tube & ~warm
+        if ringpx.sum() > 400:
+            dres = np.asarray(don).astype(np.float64)
+            dm = np.full(REF_SIZE[::-1], np.nan).astype(np.float64)
+            dsub = np.asarray(Image.open(donp).convert('RGB').resize(
+                (box[2] - box[0], box[3] - box[1]), Image.LANCZOS)).astype(np.float64)
+            g = np.ones(3)
+            if ringpx[box[1]:box[3], box[0]:box[2]].sum() > 400:
+                rr = ringpx[box[1]:box[3], box[0]:box[2]]
+                tm = np.median(stg[box[1]:box[3], box[0]:box[2]][rr], axis=0)
+                dmm = np.median(dsub[rr], axis=0)
+                g = np.clip(tm / np.maximum(dmm, 1.0), 0.85, 1.18)
+            don = Image.fromarray(np.clip(dsub * g, 0, 255).astype('uint8'))
+        ob = stage.convert('RGB').copy()
+        ob.paste(don, (box[0], box[1]), pm)
+        stage = ob
+    else:
+        donor = stage_out_donors.get(fish, DONOR_WATER)
+        stage = water_copy_fill(fish, base & ~tube, stage, donor, WATER_OFFSET[fish])
     stage = tube_fill(fish, base & tube, stage)
     dst = stage_out or 'output/stage17-%s-inp.png' % fish
     stage.save(dst)

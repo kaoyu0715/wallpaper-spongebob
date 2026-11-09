@@ -22,6 +22,9 @@ def allowed_zone(fish, stage_img):
     m = mask17.footprint(fish, margin=26)
     em = mask17.erase_mask(fish).filter(ImageFilter.MaxFilter(13))  # 补画区+贴回晕环
     m = Image.composite(Image.new('L', m.size, 255), m, em)
+    bs = Image.fromarray((compose17.inpaint_base(fish) * 255).astype('uint8')) \
+        .filter(ImageFilter.MaxFilter(13))                          # 实际补画域(含抠图α∪鱼鳍)+晕环
+    m = Image.composite(Image.new('L', m.size, 255), m, bs)
     m = Image.composite(Image.new('L', m.size, 255), m, mask17.front_band(fish))
     m = Image.composite(Image.new('L', m.size, 255), m, mask17.old_limbs(fish, dil=compose17.POSE[fish]['limb_dil'] + 6))
     if fish == 'fish1':
