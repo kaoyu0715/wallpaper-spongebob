@@ -68,6 +68,14 @@ def outer_mask(fish, size=REF_SIZE):
     return _ell(size, [(cx, cy, a, b)]).point(lambda v: 255 if v > 127 else 0)
 
 
+def open_ell(fish, size=REF_SIZE):
+    """圈口开度椭圆掩膜（OPEN_ELL 实测口径）。"""
+    ox, oy, oa, ob = OPEN_ELL[fish]
+    yy, xx = np.mgrid[0:size[1], 0:size[0]]
+    m = ((xx - ox) / oa) ** 2 + ((yy - oy) / ob) ** 2 <= 1.0
+    return Image.fromarray((m * 255).astype('uint8'))
+
+
 def hole_mask(fish, size=REF_SIZE, grow=0):
     cx, cy, a, b = HOLE_ELL[fish]
     return _ell(size, [(cx, cy, a + grow, b + grow)]).point(lambda v: 255 if v > 127 else 0)

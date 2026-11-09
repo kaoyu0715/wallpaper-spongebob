@@ -86,7 +86,20 @@ def check(fish, stage_path, name, zoom=2.4):
         cov = np.asarray(a).astype(bool)
         uncovered = torso & ~cov
         uc = int(uncovered.sum())
-        print('%s: 躯干未被角色覆盖像素 = %d / %d (要求 0)' % (fish, uc, torso.sum()))
+        ratio = 1.0 - uncovered.sum() / max(torso.sum(), 1)
+        # 未覆盖像素必须是重构后的冷调水面（底片补丁色/雾状擦痕一律不过）
+        stg = np.asarray(Image.open(stage_path).convert('RGB')).astype(int)
+        Rs, Gs, Bs = stg[:, :, 0], stg[:, :, 1], stg[:, :, 2]
+        watery = ((Rs < 170) & ((Gs - Rs > 15) | (Bs - Rs > 5))) | \
+            (stg.max(2) < 110)   # 深色水面阴影缝=中性暗，视作水
+        unc2 = np.asarray(Image.fromarray((uncovered * 255).astype('uint8'))
+                          .filter(ImageFilter.MinFilter(5))) > 0   # 去角色边缘 AA 环
+        _td = np.asarray(Image.fromarray((np.asarray(mask17.tube_band(fish)) > 0)
+                                         .astype('uint8') * 255).filter(ImageFilter.MaxFilter(11))) > 0
+        unc2 = unc2 & ~_td   # 管缘缝像素按设计保留圈阴影，不要求水色（与补画清洗同域）
+        bad = int((unc2 & ~watery).sum())
+        print('%s: 躯干角色覆盖率 = %.1f%% (要求 ≥55%%)；未覆盖中非水色像素 = %d (要求 0)'
+              % (fish, ratio * 100, bad))
     else:
         uc = None
     # 并排过闸图

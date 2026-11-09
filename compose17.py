@@ -35,8 +35,8 @@ os.makedirs('output', exist_ok=True)
 POSDIR = '/mnt/g/workspace/comfyui/output/g17cut'
 POSE = {
   # 选定单元与对位参数（fit1..3 迭代确定；flip=水平镜像对齐样张头向）
-  'fish1': dict(unit=POSDIR + '/sb-ring17f-sb-ring17f-7153_00001__00001-post.png',
-                anchor=(272, 1062), s=0.235, tilt=2, flip=True, limb_dil=9,
+  'fish1': dict(unit=POSDIR + '/sb-ring17f-sb-ring17f-7162_00001__00001-post.png',
+                anchor=(318, 1050), s=0.44, tilt=2, flip=True, limb_dil=9,
                 shadow=(0.16, 8), warm=0.07),
   'fish2': dict(unit=POSDIR + '/pat-ring17-pat-ring17-7204_00001__00001-post.png',
                 anchor=(720, 820), s=0.28, tilt=4, flip=True, limb_dil=9,
@@ -481,6 +481,18 @@ def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_
     selw2 = base & ~tube
     wmask = (stg[:, :, 0] > 150) & (stg[:, :, 1] > 60) & \
         (stg[:, :, 0] - stg[:, :, 2] > 40) & selw2
+    # 孔缘旧鱼轮廓缝残片（非冷调=底片补丁色）并入清洗（用户硬口径：缝状补丁不过闸）。
+    ox1, oy1 = _m.cut_origins()[fish]
+    ca1 = np.asarray(_m.cut_rgba(fish).split()[3])
+    big1 = np.zeros(tube.shape, bool)
+    big1[oy1:oy1 + ca1.shape[0], ox1:ox1 + ca1.shape[1]] = ca1 > 127
+    oe = np.asarray(_m.open_ell(fish)) > 0
+    tube_d = np.asarray(Image.fromarray((tube * 255).astype('uint8')).filter(ImageFilter.MaxFilter(11))) > 0
+    crev = big1 & oe & ~tube & ~tube_d
+    if fish == 'fish1':
+        crev = crev & ~(np.asarray(_m.zz_letters()) > 0)
+    cool = (stg[:, :, 0] < 170) & ((stg[:, :, 1] - stg[:, :, 0] > 15) | (stg[:, :, 2] - stg[:, :, 0] > 5))
+    wmask = wmask | (crev & ~cool)
     if wmask.any():
         wa2 = ((~selw2 | tube) * 255).astype(np.uint8)
         wa2 = 255.0 - np.asarray(Image.fromarray(wa2).filter(ImageFilter.MaxFilter(3))).astype(np.float32)
