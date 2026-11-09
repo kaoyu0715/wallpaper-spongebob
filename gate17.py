@@ -166,12 +166,15 @@ def check(fish, stage_path, name, zoom=2.4):
         stg = np.asarray(Image.open(stage_path).convert('RGB')).astype(int)
         Rs, Gs, Bs = stg[:, :, 0], stg[:, :, 1], stg[:, :, 2]
         watery = ((Rs < 170) & ((Gs - Rs > 15) | (Bs - Rs > 5))) | \
-            (stg.max(2) < 110)   # 深色水面阴影缝=中性暗，视作水
+            (stg.max(2) < 110) | \
+            ((Bs - Rs > 12) & (Gs - Rs > 8) & (Rs < 225))   # 亮青涟漪水(B≫R)也是水(实测)
+        # 深色水面阴影缝=中性暗，视作水
         refg0 = np.asarray(Image.open(mask17.REF).convert('RGB')).astype(int)
         watery = watery | (np.abs(stg - refg0).sum(2) <= 8)   # 样张原像素未动=合法(圈白/星芒)
         _R, _G, _B = stg[:, :, 0], stg[:, :, 1], stg[:, :, 2]
-        stripe_st = ((_R > 140) & (_R - _G > 80) & (_B < 100)) | \
-                    ((_R > 190) & (_G > 170) & (_B > 170))     # 圈条纹克隆=合法(鱼鳍压圈处)
+        stripe_st = ((_R - _G > 50) & (_R - _B > 60) & (_R > 90)) | \
+                    ((_R > 190) & (_R - _G > -18) & (_R - _G < 40) & (_B > 140))
+        # 与 compose 条纹道同判据（深红/粉影红同属圈条纹,鱼鳍压圈处克隆合法）
         watery = watery | stripe_st
         unc2 = np.asarray(Image.fromarray((uncovered * 255).astype('uint8'))
                           .filter(ImageFilter.MinFilter(5))) > 0   # 去角色边缘 AA 环
