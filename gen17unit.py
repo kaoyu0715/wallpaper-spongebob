@@ -120,12 +120,13 @@ ROLES = {
   #   回退到十六代裁片路线「已验证词面」（当时同款 LoRA 出过墨镜推额+交叠踝头身），
   #   仅把「坐在泳圈里」替换为「坐在地上」，其余措辞原样保留。
   'sb-ring17f': {'lora': 'sbpilot.safetensors', 'strength': 0.85, 'cfg': 5.5,
-    'pos': ('spongebob squarepants, yellow porous sponge, square body, official cartoon proportions, '
-            'big blue eyes, buck teeth, white shirt, red tie, brown shorts, red striped socks, black shoes, '
+    'pos': ('spongebob squarepants, 1boy, solo, single character only, yellow porous sponge, square body, official cartoon proportions, '
+            'big blue eyes, buck teeth, solid filled white collared shirt with bold black outlines, '
+            'red tie, brown shorts, red striped socks, black shoes, fully colored opaque torso, '
+            'no sketch lines, no translucent areas, flat cel colors, '
             'black sunglasses resting pushed up on forehead, relaxed lazy smile, half-lidded sleepy eyes, '
-            'sitting on the ground, leaning back lazily, '
-            'legs bent with ankles crossed raised in front of him, feet resting up not hanging down, '
-            'one arm resting behind him, '
+            'sitting relaxed with legs crossed at the ankles stretched toward viewer, '
+            'both arms resting at his sides, '
             'full body with margin around, nothing cropped, ' + _STYLE),
     'neg_extra': 'standing, waving hand, wide open mouth, tongue, sunglasses over eyes, '
                  'legs dangling, horizon, sky, two people, duplicated character'},

@@ -67,6 +67,28 @@ def check(fish, stage_path, name, zoom=2.4):
     keep_ring = fb & ~E & ~_limb_on_tube
     vr = int((d[keep_ring] > 0).sum())
     print('%s: 前缘带(¬肢体)差异像素 = %d / %d (要求 0)' % (fish, vr, keep_ring.sum()))
+    # 躯干覆盖硬闸（用户裁决 2026-11-09）：旧鱼躯干掩膜区（抠图α¬管带¬ZZ）
+    # 必须被新角色像素完整覆盖——「圈里只剩头/鞋/底片补丁色」必须过不了闸。
+    ox, oy = mask17.cut_origins()[fish]
+    ca = np.asarray(mask17.cut_rgba(fish).split()[3])
+    big = np.zeros(ref.shape[:2], bool)
+    big[oy:oy + ca.shape[0], ox:ox + ca.shape[1]] = ca > 127
+    # 躯干=旧鱼主体（抠图α∧圈内 OPEN 域），管上肢体/圈外鱼鳍按设计改水，不算躯干。
+    ox_, oy_, oa, ob = mask17.OPEN_ELL[fish]
+    yy0, xx0 = np.mgrid[0:ref.shape[0], 0:ref.shape[1]]
+    openell = ((xx0 - ox_) / oa) ** 2 + ((yy0 - oy_) / ob) ** 2 <= 1.0
+    torso = big & openell & ~(np.asarray(mask17.tube_band(fish)) > 0)
+    if fish == 'fish1':
+        torso = torso & ~(np.asarray(mask17.zz_letters()) > 0)
+    torso = np.asarray(Image.fromarray((torso * 255).astype('uint8'))
+                       .filter(ImageFilter.MinFilter(9))) > 0
+    if cfg.get('unit'):
+        cov = np.asarray(a).astype(bool)
+        uncovered = torso & ~cov
+        uc = int(uncovered.sum())
+        print('%s: 躯干未被角色覆盖像素 = %d / %d (要求 0)' % (fish, uc, torso.sum()))
+    else:
+        uc = None
     # 并排过闸图
     p1 = os.path.join(OUTD, '%s-%s-sbs.png' % (fish, name))
     sbs16.sbs(stage_path, mask17.CROPS[fish], p1, zoom=zoom, la='样张同区', lb='十七代 %s 贴回' % name)
