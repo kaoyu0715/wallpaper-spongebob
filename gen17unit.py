@@ -48,6 +48,19 @@ ROLES = {
             'looking to the right, full body with margin around, nothing cropped, ' + _STYLE),
     'neg_extra': 'three shoes, floating shoe, detached shoe, third shoe, long legs, big feet, '
                  'standing, walking, sunglasses over eyes, arms crossed, crossed arms, shirtless'},
+  # 海绵宝宝·二轮（对症一轮失败：7101 蓝毛衣+土色底；7102 无头+墨镜悬浮）：
+  #   服装词前置（十六代实测教训）+ 姿态短语简化直叙 + 负面排毛衣/悬浮墨镜。
+  'sb-ring17b': {'lora': 'sbpilot.safetensors', 'strength': 0.85, 'cfg': 5.5,
+    'pos': ('spongebob squarepants, white shirt, red tie, brown shorts, red striped socks, black shoes, '
+            'yellow porous sponge, tall rectangular sponge body, big blue eyes, buck teeth, '
+            'black sunglasses resting on his forehead above his eyes, half-lidded lazy eyes, lazy smile, '
+            'sitting on the ground, legs stretched forward with ankles crossed, shoes together, '
+            'both arms down, hands resting on the ground beside his hips, leaning back slightly, '
+            'relaxed pose, looking to the right, full body with margin around, nothing cropped, ' + _STYLE),
+    'neg_extra': 'three shoes, floating shoe, detached shoe, third shoe, long legs, big feet, '
+                 'standing, walking, sunglasses over eyes, floating sunglasses, detached sunglasses, '
+                 'arms crossed, crossed arms, shirtless, blue sweater, sweater, hoodie, hat, '
+                 'headless, missing head, missing face, tan background, beige background'},
   # 派大星：仰躺肘撑 + 单手举橙汁杯（含吸管/冰块/橙片）+ 双腿前伸（样张绿鱼姿态锚）
   'pat-ring17': {'lora': 'Patrick_il.safetensors', 'strength': 1.0, 'cfg': 6.0,
     'pos': ('p4tr1ckst4r, official style, starfish, pink skin, green shorts, '
@@ -80,20 +93,30 @@ SAN_NOLEI_NEG = 'flower lei, lei garland, necklace, flowers around neck, flowers
 def _submit(g):
     import time, json, urllib.error, urllib.request
     # 服务器忙时 POST 返回 500：先等队列清空再提交，失败重试
-    for k in range(40):
+    # 服务器忙（他人作业在跑）时 POST 返回 500：等到队列空闲再提交，失败退避重试
+    last = None
+    for k in range(60):
         try:
             q = json.loads(urllib.request.urlopen('http://127.0.0.1:8188/queue', timeout=10).read())
-            if not q['queue_running'] and not q['queue_pending']:
-                break
+            busy = bool(q['queue_running'] or q['queue_pending'])
         except Exception:
-            pass
-        time.sleep(5)
-    for k in range(10):
+            busy = True
+        if busy:
+            if last != 'busy':
+                print('queue busy, waiting…', flush=True)
+                last = 'busy'
+            time.sleep(10)
+            continue
         try:
             return g9.post('/prompt', {'prompt': g})['prompt_id']
         except urllib.error.HTTPError as e:
             print('POST retry %d: HTTP %s' % (k + 1, e.code), flush=True)
-            time.sleep(10 * (k + 1))
+            last = 'post'
+            time.sleep(min(30, 5 * (k + 1)))
+        except Exception as e:
+            print('POST retry %d: %s' % (k + 1, e), flush=True)
+            last = 'err'
+            time.sleep(10)
     raise RuntimeError('ComfyUI POST failed')
 
 
