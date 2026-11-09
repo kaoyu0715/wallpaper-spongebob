@@ -20,6 +20,8 @@ os.makedirs(OUTD, exist_ok=True)
 def allowed_zone(fish, stage_img):
     """允许偏离样张的像素域 = 足迹(外扩26) ∪ 前缘带 ∪ 肢体骨架区 ∪ 新单元本体 ∪ ZZ(fish1)。"""
     m = mask17.footprint(fish, margin=26)
+    em = mask17.erase_mask(fish).filter(ImageFilter.MaxFilter(13))  # 补画区+贴回晕环
+    m = Image.composite(Image.new('L', m.size, 255), m, em)
     m = Image.composite(Image.new('L', m.size, 255), m, mask17.front_band(fish))
     m = Image.composite(Image.new('L', m.size, 255), m, mask17.old_limbs(fish, dil=compose17.POSE[fish]['limb_dil'] + 6))
     if fish == 'fish1':
@@ -29,6 +31,12 @@ def allowed_zone(fish, stage_img):
         layer, u, (px, py) = compose17._unit_layer(fish, cfg)
         a = layer.split()[3].point(lambda v: 255 if v > 30 else 0).filter(ImageFilter.GaussianBlur(3))
         m = Image.composite(Image.new('L', m.size, 255), m, a)
+        # 接触影（issue ③：允许必要接触影）：与 compose17 同参复现影区并入允许域
+        ua = layer.split()[3]
+        sh = Image.fromarray((np.asarray(ua) > 40).astype('uint8') * 255)
+        sh = sh.filter(ImageFilter.GaussianBlur(7))
+        sh = sh.transform(m.size, Image.AFFINE, (1, 0, 0, 0, 1, -cfg['shadow'][1]))
+        m = Image.composite(Image.new('L', m.size, 255), m, sh.point(lambda v: 255 if v > 3 else 0))
     return m.point(lambda v: 255 if v > 96 else 0)
 
 

@@ -70,6 +70,26 @@ def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_
     d = os.path.join(G.INPUT, 'g17in')
     os.makedirs(d, exist_ok=True)
     big = crop.resize((W, H), Image.LANCZOS)
+    # Fooocus 式预填充——归一化卷积：颜色只从掩膜外（水/管）扩散进掩膜，
+    # 旧鱼色彩不参与（blur30 直接模糊含鱼图会留鱼形鬼影——512/522 号实测教训），
+    # 随后 d0.8 在该无鱼底色上重建（d1.0 大掩膜又会画出新人/新圈——501/511/521 教训）。
+    mh = m.point(lambda v: 255 if v > 127 else 0)
+    barr = np.asarray(big).astype(np.float32)
+    wa = 255.0 - np.asarray(m).astype(np.float32)          # 软权重：掩膜内=0
+    fill = barr.copy()
+    mh_b = np.asarray(mh) > 127
+    for r in (15, 40, 100, 240):          # 多尺度传播，直到掩膜深处也有颜色
+        r = int(r * upscale)
+        den = np.asarray(Image.fromarray(wa.astype('uint8')).filter(ImageFilter.GaussianBlur(r))).astype(np.float32)
+        ok = den > 30.0
+        den = np.maximum(den, 1.0)
+        for i in range(3):
+            num = np.asarray(Image.fromarray(np.clip(barr[:, :, i] * wa / 255.0, 0, 255).astype('uint8'))
+                             .filter(ImageFilter.GaussianBlur(r))).astype(np.float32)
+            v = np.clip(num * 255.0 / den, 0, 255)
+            fill[:, :, i] = np.where(ok, v, fill[:, :, i])
+    pre = Image.fromarray(fill.astype('uint8'))
+    big = Image.composite(pre, big, mh)
     big.save(os.path.join(d, name + '.png'))
     m.save(os.path.join(d, name + '-mask.png'))
     g = {
@@ -84,7 +104,7 @@ def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_
               'vae': ['1', 2], 'pixels': ['6', 0], 'mask': ['7b', 0], 'noise_mask': True}},
       '10': {'class_type': 'KSampler', 'inputs': {'model': ['1', 0], 'positive': ['8', 0], 'negative': ['8', 1],
                'latent_image': ['8', 2], 'seed': int(seed), 'steps': 30, 'cfg': 5.5,
-               'sampler_name': 'dpmpp_2m', 'scheduler': 'karras', 'denoise': 1.0}},
+               'sampler_name': 'dpmpp_2m', 'scheduler': 'karras', 'denoise': 0.8}},
       '11': {'class_type': 'VAEDecode', 'inputs': {'samples': ['10', 0], 'vae': ['1', 2]}},
       '12': {'class_type': 'SaveImage', 'inputs': {'images': ['11', 0], 'filename_prefix': 'g17hole/' + name}},
     }
@@ -96,7 +116,8 @@ def inpaint_region(fish, seed, upscale=1.7, stage_in=None, stage_out=None, mask_
         return p
     im = Image.open(p).convert('RGB').resize((x1 - x0, y1 - y0), Image.LANCZOS)
     out = stage.convert('RGB').copy()
-    pm = m.resize((x1 - x0, y1 - y0), Image.LANCZOS).filter(ImageFilter.MinFilter(5))  # 内收2px
+    pm = m.resize((x1 - x0, y1 - y0), Image.LANCZOS).filter(ImageFilter.MinFilter(9))  # 内收4px
+    pm = pm.point(lambda v: 255 if v > 200 else (0 if v < 20 else v))
     pm = pm.filter(ImageFilter.GaussianBlur(2))
     out.paste(im, (x0, y0), pm)
     dst = stage_out or 'output/stage17-%s-inp.png' % fish
@@ -154,6 +175,7 @@ def region_composite(fish, stage_in=None, out=None, inpainted=None):
     sh = sh.transform(REF_SIZE, Image.AFFINE, (1, 0, 0, 0, 1, -sh_dy))  # 下移
     base_a = np.asarray(base).astype(np.int16)
     wf = (np.asarray(sh).astype(np.float32) / 255.0) * sh_alpha
+    wf[wf < 0.01] = 0.0   # 影缘量化：阈值外精确零改动
     base_a = (base_a * (1 - wf[:, :, None])).astype(np.uint8)
     out_im = Image.fromarray(base_a).copy()
     # ② 贴入单元（warm 混 + alpha 合成，边缘仅 1.5px 羽化=「必要时低强度修缝」）
@@ -173,6 +195,16 @@ def region_composite(fish, stage_in=None, out=None, inpainted=None):
     old_limbs = mask17.old_limbs(fish, dil=cfg['limb_dil'])
     E = Image.composite(old_limbs, Image.new('L', REF_SIZE, 0), a.point(lambda v: 255 if v > 60 else 0))
     out_im = Image.composite(whole.convert('RGB'), out_im, E)
+    # ③b 前缘带锁定：带内（除旧肢体压管区与新单元本体）硬性还原样张像素，
+    #     杜绝任何羽化残差——「圈前缘像素动不得」的机器级保证。
+    fb_raw = np.asarray(mask17.front_band(fish)) > 0
+    _lk = fb_raw & (np.asarray(mask17.old_limbs(fish, dil=4)) == 0)
+    _body = np.asarray(Image.composite(Image.new('L', REF_SIZE, 255),
+              Image.new('L', REF_SIZE, 0), whole.split()[3].point(lambda v: 255 if v > 60 else 0))) > 0
+    _lk = _lk & ~_body
+    o_arr = np.asarray(out_im).copy()
+    o_arr[_lk] = np.asarray(ref)[_lk]
+    out_im = Image.fromarray(o_arr)
     # ZZ 字母（样张 z 序：字母在最前）
     if fish == 'fish1':
         zz = mask17.zz_letters()
