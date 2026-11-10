@@ -21,3 +21,17 @@ sandycheeks, squirrel in white astronaut suit with round transparent glass space
 text, watermark, signature, logo, lowres, worst quality, jpeg artifacts, photorealistic, realistic photo, blurry, blur, depth of field, pastel washed out, crayon, sketch, anime style, chibi, big eyed anime girl, extra characters, four characters, five characters, duplicated character, duplicate person, fused characters, merged characters, hybrid creature, conjoined bodies, crowd, group of people, extra heads, missing head, missing arm, missing hands, missing leg, missing fingers, extra finger, extra arms, extra hands, extra legs, fused fingers, mitten hands, deformed hands, blob hands, hands hidden, arms behind back, cropped, cut off, out of frame, partial body, patrick wearing shirt, patrick red skin, patrick brown skin, brown starfish, grey opaque helmet, mustache on sandy, three shoes, floating shoe, human face on character, night, dark sky, rainbow, whales, boats with sails, motor boat
 
 == 留档：Illustrious 整图底尝试（v1-v7，均否，见 PR 自查记录）==
+
+== 二轮改路线（issue #37 用户 2026-11-10 指定，替代整图从零生成）==
+步骤一 去圈：rings-photoref.jpg（实拍海景+四彩色泳圈）。先试 FLUX.1-Fill 掩膜补全：掩膜语义实测为
+  「0=重绘」需反相；且补全区成磨砂灰板不融水（g18r2/dering*，弃用）。改用 Qwen-Image-Edit-2511
+  （unet=qwen_image_edit_2511_bf16 + qwen3vl_8b_bf16 type=qwen_image + qwen_image_vae（注意 2.1 vae 是 64ch
+  与 edit 模型 16ch 不匹配）+ TextEncodeQwenImageEditPlus（本机版仅 1 输出，负向需第二个编码节点）
+  + VAEEncode 原图 euler/simple cfg1 20步 denoise0.65，输入需 /16 尺寸）。指令见 EDIT_PROMPT。
+步骤二 素材：黄香蕉船+三人白底一张出。用户口径「角色 LoRA 同挂」再试 4 seed（18501-18504，白底
+  1536x1024，三 LoRA 0.85/1/1）——全部融合成混合体，彻底坐实 Illustrious 多角色同图无解。
+  素材定版走 Qwen-Image-2.1 整图（白底贴纸风）：seed 18511/18512/18513 全可辨，取 18513
+  （单船、坐/躺/抱椰标准布局）→ key() 白底抠图（近白>245→0，孤岛阈值40，1px 羽化）→ RGBA 素材。
+步骤三 统一动漫化：素材贴 r2ground（去圈图 Remacri x2 → cover 1440x3136 居中裁，交付下限）→
+  整图 img2img illustriousXL+三 LoRA 全挂 CLIP-2 30步 dpmpp_2m karras cfg5.5 denoise0.5，
+  POS=船+三人+海面光斑带+上部霞光（保构图），NEG 同前。seed 18601/18602 两版初版 → 2.4x 逐角色自查。
