@@ -1,0 +1,84 @@
+{
+  "generation": 1,
+  "created_utc": "2026-11-05T07:42:30Z",
+  "model": "Qwen-Image-2.1 (qwen_image_2.1_bf16 + qwen3vl_8b_bf16 + qwen_image_2.1_vae_bf16)",
+  "resolution": "1440x3200",
+  "steps": 40,
+  "cfg": 1.0,
+  "scoring": "A 风格贴合 / B 角色齐全 / C 竖版适配 / D 画面质量，各 0-25，read_image 逐张目检；B 按六角色每人 5 分计，缺一个扣一档（单人提示词按所画角色计 5 分）",
+  "images": [
+    {
+      "slug": "group-all",
+      "seed": 1001,
+      "file": "output/gen1-group-all-s1001.png",
+      "comfy_filename": "gen1-group-all-s1001_00001_.png",
+      "size_bytes": 7978343,
+      "status": "ok",
+      "A": 21, "B": 25, "C": 23, "D": 17, "total": 86,
+      "note": "六角色齐全；但出现两只派大星（右侧粉色大头），蟹老板贴右缘，小蜗偏小且被右下珊瑚遮挡"
+    },
+    {
+      "slug": "group-all",
+      "seed": 1002,
+      "file": "output/gen1-group-all-s1002.png",
+      "comfy_filename": "gen1-group-all-s1002_00001_.png",
+      "size_bytes": 7922495,
+      "status": "ok",
+      "A": 20, "B": 25, "C": 22, "D": 14, "total": 81,
+      "note": "六角色齐全；章鱼哥与珊迪服装属性互串，气泡内松鼠手部畸变，Gary 壳色非粉红，两只派大星"
+    },
+    {
+      "slug": "group-all",
+      "seed": 1003,
+      "file": "output/gen1-group-all-s1003.png",
+      "comfy_filename": "gen1-group-all-s1003_00001_.png",
+      "size_bytes": 8212343,
+      "status": "ok",
+      "A": 22, "B": 25, "C": 23, "D": 17, "total": 87,
+      "selected": true,
+      "note": "六角色齐全且区分清楚，章鱼哥着装正确，小蜗清晰；两只派大星（右侧全身）、章鱼哥手臂过长、海绵宝宝裤色偏绿"
+    },
+    {
+      "slug": "spongebob",
+      "seed": 2001,
+      "file": "output/gen1-spongebob-s2001.png",
+      "comfy_filename": "gen1-spongebob-s2001_00001_.png",
+      "size_bytes": 6883795,
+      "status": "ok",
+      "A": 23, "B": 5, "C": 24, "D": 22, "total": 74,
+      "note": "单人提示词，B 无法按群像计；角色形态最贴官方、无畸变、安全区好"
+    },
+    {
+      "slug": "spongebob",
+      "seed": 2002,
+      "file": "output/gen1-spongebob-s2002.png",
+      "comfy_filename": "gen1-spongebob-s2002_00001_.png",
+      "size_bytes": 6718014,
+      "status": "ok",
+      "A": 23, "B": 5, "C": 24, "D": 21, "total": 73,
+      "note": "单人提示词；裤腰处多出一块红色（疑似重复领带）"
+    },
+    {
+      "slug": "spongebob",
+      "seed": 2003,
+      "file": "output/gen1-spongebob-s2003.png",
+      "comfy_filename": "gen1-spongebob-s2003_00001_.png",
+      "size_bytes": 6368843,
+      "status": "ok",
+      "A": 22, "B": 5, "C": 23, "D": 20, "total": 70,
+      "note": "单人提示词；海绵身体立体明暗偏重（轻微厚涂感），手部形状糊"
+    }
+  ],
+  "selected": {
+    "slug": "group-all",
+    "seed": 1003,
+    "total": 87,
+    "delivery": "delivery/generation-1-group-all.png",
+    "reason": "总分最高；六角色齐全无缺失、区分度好，2D 风格未漂移，竖版安全区充分"
+  },
+  "style_drift": {
+    "axis": "D 画面质量（角色重复）",
+    "detail": "group-all 三个种子全部画出两只派大星",
+    "suggestion": "在 group-all.txt 末尾追加: exactly one of each character, no duplicates (SpongeBob, Patrick, Squidward, Mr. Krabs, Sandy, Gary each appear exactly once)"
+  }
+}
