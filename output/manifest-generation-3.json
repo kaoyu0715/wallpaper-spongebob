@@ -1,0 +1,35 @@
+{
+  "generation": 3,
+  "date": "2026-11-05",
+  "issue": 7,
+  "task": "自主补齐章鱼哥/蟹老板/小蜗 LoRA 并进化群像",
+  "new_loras": [
+    {"name": "squidward-v3.safetensors", "trigger": "squidward tentacles", "dataset": "dataset-v6-sqd/30_squidward (8 源图 x3 变体 = 24, repeat 30)", "steps": 1000, "base": "illustriousXL_v01", "config": "r7同款(dim32/alpha16, lr9e-5, te4e-5, cosine+warmup50, bf16, min_snr5)"},
+    {"name": "krabs-v3.safetensors", "trigger": "eugene krabs", "dataset": "dataset-v6-krb/30_krabs (8 源图 x3 变体 = 24, repeat 30)", "steps": 1000, "base": "illustriousXL_v01", "config": "同上"},
+    {"name": "gary-v3.safetensors", "trigger": "gary the snail", "dataset": "dataset-v6-gary/40_gary (4 源图 x6 变体 = 24, repeat 40, 棋盘格伪透明已清洗)", "steps": 960, "base": "illustriousXL_v01", "config": "同上"}
+  ],
+  "dataset_notes": "剔除错分拣/水印/调色偏移/大头特写共7张；增强=随机背景(海滩裁片/纯色/渐变/噪声)+随机缩放位移+逐图标签",
+  "background": {"model": "Krea2DarkBeast3.0-bf16 + qwen3vl_4b(krea2) + wan_2.1_vae", "size": "1440x3200", "candidate_seeds": [20261105, 20261106], "selected_seed": 20261106},
+  "characters": {
+    "spongebob": {"lora": "sbpilot2.safetensors", "seed": 20261211},
+    "patrick": {"lora": "Patrick_il.safetensors", "seed": 20261201},
+    "sandy": {"lora": "Sandy_il.safetensors", "seed": 20261201},
+    "squidward": {"lora": "squidward-v3.safetensors", "seed": 20261201},
+    "krabs": {"lora": "krabs-v3.safetensors", "seed": 20261203},
+    "gary": {"lora": "gary-v3.safetensors", "seed": 20261203},
+    "plankton": {"model": "qwen_image_2.1 (无LoRA，anime底模四seed均画成双眼/错体)", "seed": 20261222}
+  },
+  "cutout": "RMBG-2.0 (alpha掩码反相修正)",
+  "candidates": [
+    {"id": "g3-cand-v1", "bg_seed": 20261105, "layout": "v1", "A_style": 22, "B_all_characters": 24, "C_vertical_composition": 22, "D_no_defects": 23, "total": 91, "note": "蟹老板被石屋半遮"},
+    {"id": "g3-cand-v2", "bg_seed": 20261105, "layout": "v2", "A_style": 22, "B_all_characters": 24, "C_vertical_composition": 23, "D_no_defects": 23, "total": 92, "note": "珊迪偏大与蟹老板重叠多"},
+    {"id": "g3-cand-v3", "bg_seed": 20261106, "layout": "v3", "A_style": 23, "B_all_characters": 24, "C_vertical_composition": 24, "D_no_defects": 23, "total": 94, "note": "七角色齐全单实例，蟹老板完整可读，纵深与留白均衡"}
+  ],
+  "selected": "g3-cand-v3 -> delivery/generation-3-group-all.png",
+  "style_drift": "已修复二代章鱼哥橄榄色/蟹老板畸形/痞老板粉色色块，补上小蜗；无重影、无黑胡子残留",
+  "next_generation_suggestions": [
+    "痞老板仍无专属 LoRA 且 cast 素材为 0（目录内全是错分拣），建议先补素材再训 plankton-v4",
+    "角色为平面赛璐璐、背景为照片实景，若下一代想统一为全插画或全3D渲染风，需要在提示词与底模层面早做决策",
+    "训练通道：WSL→Windows interop 恢复后，训练脚本可脱离 ComfyUI 中转节点直接调度"
+  ]
+}
